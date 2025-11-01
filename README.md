@@ -11,7 +11,25 @@ cp .env.example .env
 
 Set `DATABASE_URL` in `.env` if you are not using the docker compose defaults.
 
-### Local Development (Docker)
+### Local Development Options
+
+#### Option 1: Database Only (Recommended for Development)
+
+Run PostgreSQL in Docker and the NestJS app locally:
+
+```bash
+docker compose up db -d
+pnpm start:dev
+```
+
+This starts:
+
+- `glamlink-db`: PostgreSQL 16 with the `glamlink` database (running in container).
+- NestJS API: running locally via `pnpm start:dev`, connecting to the DB at `localhost:5432`.
+
+#### Option 2: Full Docker Stack
+
+Run both services in Docker:
 
 ```bash
 docker compose up --build
@@ -20,7 +38,7 @@ docker compose up --build
 This starts:
 
 - `glamlink-db`: PostgreSQL 16 with the `glamlink` database.
-- `glamlink-api`: the NestJS service built from this project.
+- `glamlink-api`: the NestJS service built from this project (containerized).
 
 The API listens on `http://localhost:3000` and connects to the Postgres container via the internal network.
 
