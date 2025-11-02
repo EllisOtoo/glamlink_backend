@@ -5,10 +5,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma, Session, User, UserRole } from '@prisma/client';
+import type { DecodedIdToken } from 'firebase-admin/auth';
 import { randomBytes, randomInt, createHash } from 'node:crypto';
 import { PrismaService } from '../prisma';
-import { UsersService } from '../users/users.service';
 import { OtpMailerService } from './otp-mailer.service';
+import { FirebaseAdminService } from '../firebase';
 
 const OTP_CODE_LENGTH = 6;
 const OTP_TTL_SECONDS = 5 * 60;
@@ -29,8 +30,8 @@ export class AuthService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly usersService: UsersService,
     private readonly otpMailer: OtpMailerService,
+    private readonly firebaseAdmin: FirebaseAdminService,
   ) {}
 
   async requestEmailOtp(email: string): Promise<void> {
@@ -198,6 +199,74 @@ export class AuthService {
     });
   }
 
+  async loginWithFirebaseIdToken(params: {
+    idToken: string;
+    requestedRole?: UserRole;
+    metadata?: {
+      userAgent?: string;
+      clientIp?: string;
+    };
+  }): Promise<AuthSession> {
+    const sanitizedToken = params.idToken?.trim();
+
+    if (!sanitizedToken) {
+      throw new BadRequestException('Firebase ID token is required.');
+    }
+
+    let decodedToken: DecodedIdToken;
+
+    try {
+      decodedToken = await this.firebaseAdmin.verifyIdToken(sanitizedToken);
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : 'Unknown verification error';
+      this.logger.warn(`Failed to verify Firebase ID token: ${reason}`);
+      throw new UnauthorizedException('Invalid Firebase ID token.');
+    }
+
+    const email = decodedToken.email;
+
+    if (!email) {
+      throw new UnauthorizedException(
+        'Firebase account is missing a verified email address.',
+      );
+    }
+
+    const normalizedEmail = this.normalizeEmail(email);
+    const requestedRole = params.requestedRole ?? UserRole.CUSTOMER;
+
+    return this.prisma.$transaction(async (tx) => {
+      const { user, created } = await this.upsertFirebaseUserInTransaction(tx, {
+        email: normalizedEmail,
+        firebaseUid: decodedToken.uid,
+        requestedRole,
+      });
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: { lastSignedInAt: new Date() },
+      });
+
+      const session = await this.createSession(tx, {
+        userId: user.id,
+        metadata: params.metadata,
+      });
+
+      if (created) {
+        this.logger.log(
+          `Created new Firebase-backed user ${user.id} (${user.email})`,
+        );
+      }
+
+      return {
+        token: session.plainToken,
+        expiresAt: session.record.expiresAt,
+        session: session.record,
+        user,
+      };
+    });
+  }
+
   private normalizeEmail(email: string): string {
     if (!email) {
       throw new BadRequestException('Email is required.');
@@ -262,6 +331,70 @@ export class AuthService {
     const user = await tx.user.create({
       data: {
         email,
+        role: roleToAssign,
+      },
+    });
+
+    return { user, created: true };
+  }
+
+  private async upsertFirebaseUserInTransaction(
+    tx: Prisma.TransactionClient,
+    params: {
+      email: string;
+      firebaseUid: string;
+      requestedRole: UserRole;
+    },
+  ): Promise<{ user: User; created: boolean }> {
+    const existingByUid = await tx.user.findUnique({
+      where: { firebaseUid: params.firebaseUid },
+    });
+
+    if (existingByUid) {
+      if (existingByUid.email !== params.email) {
+        const updated = await tx.user.update({
+          where: { id: existingByUid.id },
+          data: { email: params.email },
+        });
+
+        return { user: updated, created: false };
+      }
+
+      return { user: existingByUid, created: false };
+    }
+
+    const existingByEmail = await tx.user.findUnique({
+      where: { email: params.email },
+    });
+
+    if (existingByEmail) {
+      if (
+        existingByEmail.firebaseUid &&
+        existingByEmail.firebaseUid !== params.firebaseUid
+      ) {
+        this.logger.warn(
+          `Attempt to relink Firebase UID ${params.firebaseUid} to user ${existingByEmail.id} already linked to ${existingByEmail.firebaseUid}. Keeping existing mapping.`,
+        );
+        return { user: existingByEmail, created: false };
+      }
+
+      const updated = await tx.user.update({
+        where: { id: existingByEmail.id },
+        data: { firebaseUid: params.firebaseUid },
+      });
+
+      return { user: updated, created: false };
+    }
+
+    const roleToAssign =
+      params.requestedRole === UserRole.ADMIN
+        ? UserRole.CUSTOMER
+        : params.requestedRole;
+
+    const user = await tx.user.create({
+      data: {
+        email: params.email,
+        firebaseUid: params.firebaseUid,
         role: roleToAssign,
       },
     });

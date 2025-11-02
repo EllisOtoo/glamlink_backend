@@ -11,6 +11,16 @@ cp .env.example .env
 
 Set `DATABASE_URL` in `.env` if you are not using the docker compose defaults.
 
+Configure Firebase admin credentials if you plan to accept Firebase-authenticated traffic from the mobile app:
+
+```bash
+# .env
+FIREBASE_PROJECT_ID="glamlink-prod"
+FIREBASE_CLIENT_EMAIL="firebase-adminsdk@glamlink-prod.iam.gserviceaccount.com"
+# Copy the PEM private key and replace literal newlines with \n sequences
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
 ### Local Development Options
 
 #### Option 1: Database Only (Recommended for Development)
@@ -61,6 +71,11 @@ Run `pnpm prisma:migrate` after bringing up Postgres to create the initial schem
 - `pnpm start:dev` — NestJS in watch mode (requires a local Postgres instance)
 - `pnpm lint` — ESLint
 - `pnpm test` — Jest unit tests
+
+## Authentication
+
+- Email OTP is still supported via `POST /auth/request-otp` and `POST /auth/verify-otp`.
+- Mobile clients using Firebase Auth can exchange a Firebase ID token for a GlamLink API session token via `POST /auth/firebase-login` with body `{ "idToken": "<firebase-id-token>" }`. The response mirrors the OTP login flow and returns the server-issued session token used for subsequent authenticated requests.
 
 ## Next Steps
 

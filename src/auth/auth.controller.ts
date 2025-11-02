@@ -24,6 +24,11 @@ interface VerifyOtpBody {
   role?: UserRole;
 }
 
+interface FirebaseLoginBody {
+  idToken: string;
+  role?: UserRole;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -52,6 +57,41 @@ export class AuthController {
     const authSession = await this.authService.verifyEmailOtp({
       email: body.email,
       code: body.code,
+      requestedRole: body.role,
+      metadata: {
+        userAgent: request.headers['user-agent'],
+        clientIp: this.extractClientIp(request),
+      },
+    });
+
+    return {
+      token: authSession.token,
+      expiresAt: authSession.expiresAt,
+      user: {
+        id: authSession.user.id,
+        email: authSession.user.email,
+        role: authSession.user.role,
+        lastSignedInAt: authSession.user.lastSignedInAt,
+      },
+    };
+  }
+
+  @Post('firebase-login')
+  async firebaseLogin(
+    @Body() body: FirebaseLoginBody,
+    @Req() request: Request,
+  ): Promise<{
+    token: string;
+    expiresAt: Date;
+    user: {
+      id: string;
+      email: string;
+      role: UserRole;
+      lastSignedInAt: Date | null;
+    };
+  }> {
+    const authSession = await this.authService.loginWithFirebaseIdToken({
+      idToken: body.idToken,
       requestedRole: body.role,
       metadata: {
         userAgent: request.headers['user-agent'],

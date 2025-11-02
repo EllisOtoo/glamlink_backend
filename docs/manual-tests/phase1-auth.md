@@ -27,6 +27,19 @@
    - Expect `204 No Content`.
 3. Reuse the token for `GET /auth/me`; expect `401` because the session was revoked.
 
+## Firebase ID Token Login
+1. Sign in to Firebase from the mobile client or Firebase CLI and obtain an ID token (e.g., via `firebase auth:sign-in-with-email-and-password`).
+2. Call `POST /auth/firebase-login` with
+   ```json
+   {
+     "idToken": "<firebase-id-token>"
+   }
+   ```
+3. Confirm the response contains a `token`, `expiresAt`, and `user` payload. The backend session token should be used for subsequent `Authorization: Bearer {token}` requests.
+4. Exercise `GET /auth/me` with the returned token; expect a `200` response with user details.
+5. Call `POST /auth/logout` with the same token; expect `204`.
+6. Retry `GET /auth/me`; expect `401` because the session token is revoked even though the Firebase ID token remains valid.
+
 ## Error Handling
 1. Submit `POST /auth/verify-otp` with a wrong code; expect `401 Invalid or expired code` and attempt counter increments.
 2. Repeat wrong code until limit hit; expect `401 Too many attempts.`
