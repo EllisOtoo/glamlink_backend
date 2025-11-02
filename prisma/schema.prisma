@@ -8,9 +8,61 @@ datasource db {
 }
 
 model Vendor {
-  id          String   @id @default(cuid())
+  id           String   @id @default(cuid())
   businessName String
-  handle      String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  handle       String   @unique
+  userId       String?  @unique
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model User {
+  id             String     @id @default(cuid())
+  email          String     @unique
+  role           UserRole   @default(CUSTOMER)
+  lastSignedInAt DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  sessions       Session[]
+  emailOtps      EmailOtp[]
+  vendor         Vendor?
+}
+
+model EmailOtp {
+  id           String   @id @default(cuid())
+  email        String
+  codeHash     String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([expiresAt])
+  @@index([email, consumedAt])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  userAgent  String?
+  clientIp   String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum UserRole {
+  CUSTOMER
+  VENDOR
+  ADMIN
 }
