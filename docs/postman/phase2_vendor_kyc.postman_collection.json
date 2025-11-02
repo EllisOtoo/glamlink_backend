@@ -1,0 +1,252 @@
+{
+  "info": {
+    "name": "GlamLink Phase 2 – Vendor KYC",
+    "description": "Collection covering vendor profile onboarding, document submission, and admin review flows.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Vendor – Get My Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vendor_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/vendors/me",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "vendors",
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Vendor – Update Profile",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vendor_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"businessName\": \"Glow Studio\",\n  \"handle\": \"glowstudio\",\n  \"contactEmail\": \"vendor@example.com\",\n  \"phoneNumber\": \"233555123456\",\n  \"bio\": \"Premium braids and makeup in Accra.\",\n  \"locationArea\": \"East Legon\",\n  \"instagramHandle\": \"glowstudio\",\n  \"websiteUrl\": \"https://glowstudio.example\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/vendors/me",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "vendors",
+            "me"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Vendor – Add KYC Document",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vendor_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"ID_CARD\",\n  \"fileName\": \"ghana-card-front.jpg\",\n  \"storageKey\": \"uploads/kyc/ghana-card-front.jpg\",\n  \"mimeType\": \"image/jpeg\",\n  \"sizeBytes\": 512000\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/vendors/me/documents",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "vendors",
+            "me",
+            "documents"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Vendor – Submit For Review",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vendor_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/vendors/me/submit",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "vendors",
+            "me",
+            "submit"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Vendor – Verified Check",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{vendor_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/vendors/me/verified-check",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "vendors",
+            "me",
+            "verified-check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Admin – Get Vendor By Id",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/admin/vendors/{{vendor_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "admin",
+            "vendors",
+            "{{vendor_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Admin – Approve Vendor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"note\": \"Verified documents and business details.\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admin/vendors/{{vendor_id}}/approve",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "admin",
+            "vendors",
+            "{{vendor_id}}",
+            "approve"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Admin – Reject Vendor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"Document mismatch, please re-upload.\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/admin/vendors/{{vendor_id}}/reject",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "admin",
+            "vendors",
+            "{{vendor_id}}",
+            "reject"
+          ]
+        }
+      }
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "vendor_token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "vendor_id",
+      "value": ""
+    }
+  ]
+}

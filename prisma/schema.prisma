@@ -8,13 +8,29 @@ datasource db {
 }
 
 model Vendor {
-  id           String   @id @default(cuid())
-  businessName String
-  handle       String   @unique
-  userId       String?  @unique
-  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String                @id @default(cuid())
+  businessName    String
+  handle          String                @unique
+  status          VendorStatus          @default(DRAFT)
+  contactEmail    String?
+  phoneNumber     String?
+  bio             String?
+  locationArea    String?
+  instagramHandle String?
+  websiteUrl      String?
+  kycSubmittedAt  DateTime?
+  verifiedAt      DateTime?
+  rejectionReason String?
+  reviewedById    String?
+  userId          String?               @unique
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reviewedBy      User?                 @relation("VendorReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents       KycDocument[]
+  statusHistory   VendorStatusHistory[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([status])
 }
 
 model User {
@@ -27,6 +43,8 @@ model User {
   sessions       Session[]
   emailOtps      EmailOtp[]
   vendor         Vendor?
+  statusEvents   VendorStatusHistory[]  @relation("VendorStatusActor")
+  reviewedVendors Vendor[]              @relation("VendorReviewedBy")
 }
 
 model EmailOtp {
@@ -43,6 +61,35 @@ model EmailOtp {
   @@index([email])
   @@index([expiresAt])
   @@index([email, consumedAt])
+}
+
+model KycDocument {
+  id         String   @id @default(cuid())
+  vendorId   String
+  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  type       String
+  fileName   String
+  storageKey String
+  mimeType   String?
+  sizeBytes  Int?
+  uploadedAt DateTime @default(now())
+
+  @@index([vendorId])
+}
+
+model VendorStatusHistory {
+  id         String        @id @default(cuid())
+  vendorId   String
+  vendor     Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  fromStatus VendorStatus?
+  toStatus   VendorStatus
+  reason     String?
+  actorId    String?
+  actor      User?         @relation("VendorStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now())
+
+  @@index([vendorId])
+  @@index([actorId])
 }
 
 model Session {
@@ -65,4 +112,12 @@ enum UserRole {
   CUSTOMER
   VENDOR
   ADMIN
+}
+
+enum VendorStatus {
+  DRAFT
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
 }
