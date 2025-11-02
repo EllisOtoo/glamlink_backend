@@ -7,27 +7,15 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import { UserRole } from '@prisma/client';
+import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { RequestWithAuth } from './decorators/current-user.decorator';
-
-interface RequestOtpBody {
-  email: string;
-}
-
-interface VerifyOtpBody {
-  email: string;
-  code: string;
-  role?: UserRole;
-}
-
-interface FirebaseLoginBody {
-  idToken: string;
-  role?: UserRole;
-}
+import { RequestOtpDto } from './dto/request-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { FirebaseLoginDto } from './dto/firebase-login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -35,14 +23,14 @@ export class AuthController {
 
   @Post('request-otp')
   @HttpCode(202)
-  async requestOtp(@Body() body: RequestOtpBody): Promise<{ message: string }> {
+  async requestOtp(@Body() body: RequestOtpDto): Promise<{ message: string }> {
     await this.authService.requestEmailOtp(body.email);
     return { message: 'OTP sent if email exists.' };
   }
 
   @Post('verify-otp')
   async verifyOtp(
-    @Body() body: VerifyOtpBody,
+    @Body() body: VerifyOtpDto,
     @Req() request: Request,
   ): Promise<{
     token: string;
@@ -78,7 +66,7 @@ export class AuthController {
 
   @Post('firebase-login')
   async firebaseLogin(
-    @Body() body: FirebaseLoginBody,
+    @Body() body: FirebaseLoginDto,
     @Req() request: Request,
   ): Promise<{
     token: string;
