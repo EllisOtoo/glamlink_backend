@@ -27,6 +27,9 @@ model Vendor {
   reviewedBy      User?                 @relation("VendorReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   documents       KycDocument[]
   statusHistory   VendorStatusHistory[]
+  services        Service[]
+  weeklyHours     WeeklyAvailability[]
+  availabilityOverrides AvailabilityOverride[]
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -121,4 +124,52 @@ enum VendorStatus {
   VERIFIED
   REJECTED
   SUSPENDED
+}
+
+model Service {
+  id              String   @id @default(cuid())
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  priceCents      Int
+  durationMinutes Int
+  bufferMinutes   Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([vendorId, isActive])
+}
+
+model WeeklyAvailability {
+  id          String   @id @default(cuid())
+  vendorId    String
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([vendorId, dayOfWeek])
+}
+
+model AvailabilityOverride {
+  id        String                   @id @default(cuid())
+  vendorId  String
+  vendor    Vendor                   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  startsAt  DateTime
+  endsAt    DateTime
+  type      AvailabilityOverrideType
+  reason    String?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([vendorId, startsAt])
+}
+
+enum AvailabilityOverrideType {
+  BLOCK
+  EXTEND
 }

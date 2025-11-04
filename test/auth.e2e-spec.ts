@@ -5,13 +5,79 @@ import { AppModule } from '../src/app.module';
 import { OtpMailerService } from '../src/auth/otp-mailer.service';
 import { PrismaService } from '../src/prisma';
 
+type HttpServer = Parameters<typeof request>[0];
+
+const assertMessageBody = (body: unknown): { message: string } => {
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    typeof (body as { message?: unknown }).message !== 'string'
+  ) {
+    throw new Error('Unexpected response payload.');
+  }
+  return body as { message: string };
+};
+
+const assertVerifyBody = (
+  body: unknown,
+): {
+  token: string;
+  expiresAt: string;
+  user: { email: string; role: string };
+} => {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Unexpected verify response payload.');
+  }
+
+  const candidate = body as {
+    token?: unknown;
+    expiresAt?: unknown;
+    user?: { email?: unknown; role?: unknown };
+  };
+
+  if (
+    typeof candidate.token !== 'string' ||
+    typeof candidate.expiresAt !== 'string' ||
+    !candidate.user ||
+    typeof candidate.user.email !== 'string' ||
+    typeof candidate.user.role !== 'string'
+  ) {
+    throw new Error('Unexpected verify response payload.');
+  }
+
+  return {
+    token: candidate.token,
+    expiresAt: candidate.expiresAt,
+    user: {
+      email: candidate.user.email,
+      role: candidate.user.role,
+    },
+  };
+};
+
+const assertUserBody = (body: unknown): { email: string; role: string } => {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Unexpected user response payload.');
+  }
+
+  const candidate = body as { email?: unknown; role?: unknown };
+  if (
+    typeof candidate.email !== 'string' ||
+    typeof candidate.role !== 'string'
+  ) {
+    throw new Error('Unexpected user response payload.');
+  }
+
+  return { email: candidate.email, role: candidate.role };
+};
+
 class FakeOtpMailerService {
   sent: Array<{ email: string; code: string }> = [];
   private health:
     | { status: 'up'; message?: string }
     | { status: 'down'; message: string } = { status: 'up' };
 
-  async sendLoginCode(email: string, code: string): Promise<void> {
+  sendLoginCode(email: string, code: string): void {
     this.sent.push({ email, code });
   }
 
@@ -30,7 +96,7 @@ describe('Auth Phase 1 Flows (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let mailer: FakeOtpMailerService;
-  let httpServer: any;
+  let httpServer: HttpServer;
 
   beforeAll(async () => {
     mailer = new FakeOtpMailerService();
@@ -46,7 +112,7 @@ describe('Auth Phase 1 Flows (e2e)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
-    httpServer = app.getHttpServer();
+    httpServer = app.getHttpServer() as HttpServer;
   });
 
   afterAll(async () => {
@@ -73,7 +139,8 @@ describe('Auth Phase 1 Flows (e2e)', () => {
       .send({ email })
       .expect(202);
 
-    expect(firstRequest.body).toEqual({
+    const firstBody = assertMessageBody(firstRequest.body);
+    expect(firstBody).toEqual({
       message: 'OTP sent if email exists.',
     });
     expect(mailer.sent).toHaveLength(1);
@@ -87,7 +154,8 @@ describe('Auth Phase 1 Flows (e2e)', () => {
       .post('/auth/request-otp')
       .send({ email })
       .expect(400);
-    expect(cooldownResponse.body.message).toBe(
+    const cooldownBody = assertMessageBody(cooldownResponse.body);
+    expect(cooldownBody.message).toBe(
       'OTP recently sent. Please wait before requesting another code.',
     );
 
@@ -100,19 +168,22 @@ describe('Auth Phase 1 Flows (e2e)', () => {
       })
       .expect(200);
 
-    expect(verifyResponse.body.token).toEqual(expect.any(String));
-    expect(verifyResponse.body.expiresAt).toEqual(expect.any(String));
-    expect(verifyResponse.body.user).toMatchObject({
+    const verifyBody = assertVerifyBody(verifyResponse.body);
+
+    expect(verifyBody.token).toEqual(expect.any(String));
+    expect(verifyBody.expiresAt).toEqual(expect.any(String));
+    expect(verifyBody.user).toMatchObject({
       email: email.toLowerCase(),
       role: 'VENDOR',
     });
 
-    const token = verifyResponse.body.token as string;
+    const token = verifyBody.token;
     const authenticated = await request(httpServer)
       .get('/auth/me')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
-    expect(authenticated.body).toMatchObject({
+    const authenticatedBody = assertUserBody(authenticated.body);
+    expect(authenticatedBody).toMatchObject({
       email: email.toLowerCase(),
       role: 'VENDOR',
     });
@@ -134,6 +205,7 @@ describe('Auth Phase 1 Flows (e2e)', () => {
         code: otpCode,
       })
       .expect(401);
-    expect(reusedCode.body.message).toBe('Invalid or expired code.');
+    const reusedBody = assertMessageBody(reusedCode.body);
+    expect(reusedBody.message).toBe('Invalid or expired code.');
   });
 });

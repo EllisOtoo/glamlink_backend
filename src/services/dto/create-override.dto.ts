@@ -1,0 +1,24 @@
+import { AvailabilityOverrideType } from '@prisma/client';
+import {
+  IsEnum,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+
+export class CreateAvailabilityOverrideDto {
+  @IsEnum(AvailabilityOverrideType)
+  type!: AvailabilityOverrideType;
+
+  @IsISO8601()
+  startsAt!: string;
+
+  @IsISO8601()
+  endsAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reason?: string;
+}
