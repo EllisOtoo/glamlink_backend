@@ -15,6 +15,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { RequestWithAuth } from '../auth/decorators/current-user.decorator';
+import { VerifiedVendorGuard } from '../vendors/guards/verified-vendor.guard';
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
@@ -23,7 +24,7 @@ import { CreateAvailabilityOverrideDto } from './dto/create-override.dto';
 import { AvailabilitySlotsQueryDto } from './dto/availability-slots.dto';
 
 @Controller('vendors/me/services')
-@UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(SessionAuthGuard, RolesGuard, VerifiedVendorGuard)
 @Roles(UserRole.VENDOR)
 export class VendorServicesController {
   constructor(private readonly servicesService: ServicesService) {}
@@ -72,7 +73,7 @@ export class VendorServicesController {
 }
 
 @Controller('vendors/me/availability')
-@UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(SessionAuthGuard, RolesGuard, VerifiedVendorGuard)
 @Roles(UserRole.VENDOR)
 export class VendorAvailabilityController {
   constructor(private readonly servicesService: ServicesService) {}
