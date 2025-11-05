@@ -30,6 +30,7 @@ model Vendor {
   services        Service[]
   weeklyHours     WeeklyAvailability[]
   availabilityOverrides AvailabilityOverride[]
+  bookings        Booking[]
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -135,9 +136,11 @@ model Service {
   priceCents      Int
   durationMinutes Int
   bufferMinutes   Int      @default(0)
+  depositPercent  Int?
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  bookings        Booking[]
 
   @@index([vendorId, isActive])
 }
@@ -172,4 +175,71 @@ model AvailabilityOverride {
 enum AvailabilityOverrideType {
   BLOCK
   EXTEND
+}
+
+model Booking {
+  id                String         @id @default(cuid())
+  reference         String         @unique
+  vendorId          String
+  vendor            Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  serviceId         String
+  service           Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customerName      String
+  customerEmail     String?
+  customerPhone     String?
+  status            BookingStatus  @default(PENDING)
+  scheduledStart    DateTime
+  scheduledEnd      DateTime
+  pricePesewas      Int
+  depositPesewas    Int
+  balancePesewas    Int
+  paymentIntent     PaymentIntent?
+  notes             String?
+  cancelledAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([vendorId, scheduledStart])
+  @@index([vendorId, status])
+  @@index([serviceId, scheduledStart])
+}
+
+model PaymentIntent {
+  id               String          @id @default(cuid())
+  bookingId        String          @unique
+  booking          Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  provider         PaymentProvider
+  providerRef      String          @unique
+  status           PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
+  amountPesewas    Int
+  currency         String          @default("GHS")
+  metadata         Json?
+  lastError        String?
+  confirmedAt      DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+enum BookingStatus {
+  PENDING
+  AWAITING_PAYMENT
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentProvider {
+  PAYSTACK
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT_METHOD
+  REQUIRES_ACTION
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELED
 }

@@ -91,6 +91,7 @@ function createUser(role: UserRole): User {
   return {
     id: 'user-id',
     email: role === UserRole.ADMIN ? 'admin@example.com' : 'user@example.com',
+    firebaseUid: null,
     role,
     lastSignedInAt: null,
     createdAt: new Date(),

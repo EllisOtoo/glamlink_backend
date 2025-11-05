@@ -21,6 +21,7 @@ Goal: deliver the NestJS backend in progressive slices so product and ops can ru
 - Scope: service catalog CRUD, pricing validations, availability calendar, buffer enforcement, calendar projection query.
 - Manual tests: create three services, set weekly schedule + exception, fetch availability for next 7 days and confirm gaps.
 - Exit criteria: double-booking prevented in DB transaction tests; availability endpoint returns deterministic slots.
+- Notes: add automated coverage that (1) confirms the slot generator returns the same list for identical inputs and (2) verifies booking transactions reject overlapping reservations.
 
 ## Phase 4 — Booking & Payments
 - Scope: booking workflow, deposit calculation, payment intent integration, booking confirmation events.
