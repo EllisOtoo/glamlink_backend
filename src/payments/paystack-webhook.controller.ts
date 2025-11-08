@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { PaystackService } from './paystack.service';
+import type { PaystackWebhookEvent } from './paystack.service';
 
 type RawBodyRequest<T> = T & { rawBody?: Buffer };
 
@@ -21,13 +22,12 @@ export class PaystackWebhookController {
     @Req() request: RawBodyRequest<Request>,
     @Headers('x-paystack-signature') signature?: string,
   ) {
-    if (
-      !this.paystackService.verifySignature(signature, request.rawBody)
-    ) {
+    if (!this.paystackService.verifySignature(signature, request.rawBody)) {
       throw new UnauthorizedException('Invalid Paystack signature.');
     }
 
-    await this.paystackService.handleWebhook(request.body);
+    const payload = request.body as PaystackWebhookEvent;
+    await this.paystackService.handleWebhook(payload);
     return { received: true };
   }
 }

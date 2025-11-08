@@ -1,7 +1,10 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { Request } from 'express';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+
+type RawBodyRequest = Request & { rawBody?: Buffer };
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -17,7 +20,7 @@ async function bootstrap() {
   });
   app.use(
     json({
-      verify: (req: any, _res, buffer) => {
+      verify: (req: RawBodyRequest, _res, buffer) => {
         req.rawBody = buffer;
       },
     }),
@@ -25,7 +28,7 @@ async function bootstrap() {
   app.use(
     urlencoded({
       extended: true,
-      verify: (req: any, _res, buffer) => {
+      verify: (req: RawBodyRequest, _res, buffer) => {
         req.rawBody = buffer;
       },
     }),

@@ -54,6 +54,7 @@ export class ServicesService {
         ? dto.description.trim()
         : null;
     const isActive = typeof dto.isActive === 'boolean' ? dto.isActive : true;
+    const depositPercent = this.normalizeDepositPercent(dto.depositPercent);
 
     return this.prisma.service.create({
       data: {
@@ -63,6 +64,7 @@ export class ServicesService {
         priceCents: dto.priceCents,
         durationMinutes: dto.durationMinutes,
         bufferMinutes,
+        depositPercent,
         isActive,
       },
     });
@@ -87,6 +89,7 @@ export class ServicesService {
       priceCents?: number;
       durationMinutes?: number;
       bufferMinutes?: number;
+      depositPercent?: number | null;
       isActive?: boolean;
     } = {};
 
@@ -114,6 +117,10 @@ export class ServicesService {
     if (typeof dto.bufferMinutes === 'number') {
       this.assertBuffer(dto.bufferMinutes);
       data.bufferMinutes = dto.bufferMinutes;
+    }
+
+    if (typeof dto.depositPercent === 'number') {
+      data.depositPercent = this.normalizeDepositPercent(dto.depositPercent);
     }
 
     if (typeof dto.isActive === 'boolean') {
@@ -311,6 +318,22 @@ export class ServicesService {
         'Buffer must be between 0 and 180 minutes.',
       );
     }
+  }
+
+  private normalizeDepositPercent(value?: number): number | null {
+    if (typeof value !== 'number') {
+      return null;
+    }
+
+    if (value < 0) {
+      return 0;
+    }
+
+    if (value > 100) {
+      return 100;
+    }
+
+    return value;
   }
 
   private validateWeeklyWindows(
