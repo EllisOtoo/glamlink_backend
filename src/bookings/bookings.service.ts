@@ -18,7 +18,6 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
 import { ServicesService } from '../services/services.service';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
-import { VendorBookingsQueryDto } from './dto/vendor-bookings-query.dto';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -82,9 +81,7 @@ export class BookingsService {
           customerEmail: dto.customerEmail?.trim().toLowerCase() ?? null,
           customerPhone: dto.customerPhone?.trim() ?? null,
           status:
-            deposit > 0
-              ? BookingStatus.AWAITING_PAYMENT
-              : BookingStatus.CONFIRMED,
+            deposit > 0 ? BookingStatus.AWAITING_PAYMENT : BookingStatus.CONFIRMED,
           scheduledStart: start,
           scheduledEnd,
           pricePesewas: price,
@@ -122,73 +119,10 @@ export class BookingsService {
     });
 
     if (!persisted) {
-      throw new NotFoundException(
-        'Booking could not be retrieved after creation.',
-      );
+      throw new NotFoundException('Booking could not be retrieved after creation.');
     }
 
     return persisted;
-  }
-
-  async listVendorBookings(
-    userId: string,
-    query: VendorBookingsQueryDto,
-  ): Promise<
-    (Booking & { paymentIntent: PaymentIntent | null; service: Service })[]
-  > {
-    const vendor = await this.requireVendor(userId);
-    const where: Prisma.BookingWhereInput = {
-      vendorId: vendor.id,
-    };
-
-    if (query.status) {
-      where.status = query.status;
-    }
-
-    const scheduledStart: Prisma.DateTimeFilter = {};
-    if (query.from) {
-      scheduledStart.gte = this.parseIsoDate(query.from, 'from');
-    }
-    if (query.to) {
-      scheduledStart.lte = this.parseIsoDate(query.to, 'to');
-    }
-    if (Object.keys(scheduledStart).length > 0) {
-      where.scheduledStart = scheduledStart;
-    }
-
-    const limit = query.limit ?? 50;
-
-    return this.prisma.booking.findMany({
-      where,
-      orderBy: { scheduledStart: 'asc' },
-      take: limit,
-      include: {
-        paymentIntent: true,
-        service: true,
-      },
-    });
-  }
-
-  async getVendorBooking(
-    userId: string,
-    bookingId: string,
-  ): Promise<
-    Booking & { paymentIntent: PaymentIntent | null; service: Service }
-  > {
-    const vendor = await this.requireVendor(userId);
-    const booking = await this.prisma.booking.findFirst({
-      where: { id: bookingId, vendorId: vendor.id },
-      include: {
-        paymentIntent: true,
-        service: true,
-      },
-    });
-
-    if (!booking) {
-      throw new NotFoundException('Booking not found.');
-    }
-
-    return booking;
   }
 
   private async findServiceAndVendor(
@@ -229,14 +163,11 @@ export class BookingsService {
     service: Service,
     startIso: string,
   ) {
-    const slots = await this.servicesService.listAvailabilitySlots(
-      vendor.userId!,
-      {
-        serviceId: service.id,
-        startDate: startIso,
-        days: 1,
-      },
-    );
+    const slots = await this.servicesService.listAvailabilitySlots(vendor.userId!, {
+      serviceId: service.id,
+      startDate: startIso,
+      days: 1,
+    });
 
     const slot = slots.find((candidate) => candidate.startAt === startIso);
     if (!slot) {
@@ -289,25 +220,5 @@ export class BookingsService {
       throw new BadRequestException('Service price must be greater than zero.');
     }
     return amount;
-  }
-
-  private async requireVendor(userId: string): Promise<Vendor> {
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { userId },
-    });
-
-    if (!vendor) {
-      throw new NotFoundException('Vendor profile not found.');
-    }
-
-    return vendor;
-  }
-
-  private parseIsoDate(value: string, label: string): Date {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException(`Invalid ${label} date.`);
-    }
-    return parsed;
   }
 }

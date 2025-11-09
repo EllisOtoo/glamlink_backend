@@ -3,7 +3,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  Max,
   MaxLength,
   Min,
   MinLength,
@@ -32,12 +31,6 @@ export class CreateServiceDto {
   @IsInt()
   @Min(0)
   bufferMinutes?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  depositPercent?: number;
 
   @IsOptional()
   @IsBoolean()

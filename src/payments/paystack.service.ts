@@ -79,19 +79,14 @@ export class PaystackService {
     };
   }
 
-  verifySignature(
-    signature: string | undefined,
-    rawBody: Buffer | undefined,
-  ): boolean {
+  verifySignature(signature: string | undefined, rawBody: Buffer | undefined): boolean {
     if (!signature || !rawBody) {
       return false;
     }
 
     const secret = this.getSecretKey();
     if (!secret) {
-      this.logger.warn(
-        'PAYSTACK_SECRET_KEY is not configured; rejecting webhook.',
-      );
+      this.logger.warn('PAYSTACK_SECRET_KEY is not configured; rejecting webhook.');
       return false;
     }
 
@@ -115,15 +110,11 @@ export class PaystackService {
         await this.handleChargeFailure(payload);
         break;
       default:
-        this.logger.debug(
-          `Ignoring unsupported Paystack event: ${payload.event}`,
-        );
+        this.logger.debug(`Ignoring unsupported Paystack event: ${payload.event}`);
     }
   }
 
-  private async handleChargeSuccess(
-    payload: PaystackWebhookEvent,
-  ): Promise<void> {
+  private async handleChargeSuccess(payload: PaystackWebhookEvent): Promise<void> {
     const data = payload.data;
     if (!data?.reference || typeof data.amount !== 'number') {
       this.logger.warn('charge.success missing reference or amount.');
@@ -138,9 +129,7 @@ export class PaystackService {
       });
 
       if (!paymentIntent) {
-        this.logger.warn(
-          `Paystack reference ${data.reference} not recognised.`,
-        );
+        this.logger.warn(`Paystack reference ${data.reference} not recognised.`);
         return;
       }
 
@@ -189,9 +178,7 @@ export class PaystackService {
     });
   }
 
-  private async handleChargeFailure(
-    payload: PaystackWebhookEvent,
-  ): Promise<void> {
+  private async handleChargeFailure(payload: PaystackWebhookEvent): Promise<void> {
     const data = payload.data;
     if (!data?.reference) {
       this.logger.warn('Paystack failure event missing reference.');
@@ -204,9 +191,7 @@ export class PaystackService {
       });
 
       if (!paymentIntent) {
-        this.logger.warn(
-          `Failure event reference not recognised: ${data.reference}`,
-        );
+        this.logger.warn(`Failure event reference not recognised: ${data.reference}`);
         return;
       }
 
