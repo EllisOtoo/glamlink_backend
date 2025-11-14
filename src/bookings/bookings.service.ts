@@ -18,6 +18,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
 import { ServicesService } from '../services/services.service';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
+import { BookingEventsService } from '../events/booking-events.service';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -30,6 +31,7 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly servicesService: ServicesService,
+    private readonly bookingEvents: BookingEventsService,
   ) {}
 
   async createPublicBooking(
@@ -120,6 +122,14 @@ export class BookingsService {
 
     if (!persisted) {
       throw new NotFoundException('Booking could not be retrieved after creation.');
+    }
+
+    this.bookingEvents.emitCreated(persisted);
+    if (persisted.status === BookingStatus.AWAITING_PAYMENT) {
+      this.bookingEvents.emitAwaitingPayment(persisted);
+    }
+    if (persisted.status === BookingStatus.CONFIRMED) {
+      this.bookingEvents.emitConfirmed(persisted);
     }
 
     return persisted;

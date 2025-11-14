@@ -9,6 +9,7 @@ import {
   PaymentIntent,
 } from '@prisma/client';
 import { PrismaService } from '../prisma';
+import { BookingEventsService } from '../events/booking-events.service';
 
 export interface PaystackCheckoutPayload {
   publicKey: string;
@@ -39,6 +40,7 @@ export class PaystackService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly bookingEvents: BookingEventsService,
   ) {}
 
   getPublicKey(): string {
@@ -122,6 +124,7 @@ export class PaystackService {
     }
 
     const currency = (data.currency ?? 'GHS').toUpperCase();
+    let confirmedBooking: Booking | null = null;
     await this.prisma.$transaction(async (tx) => {
       const paymentIntent = await tx.paymentIntent.findUnique({
         where: { providerRef: data.reference },
@@ -169,13 +172,21 @@ export class PaystackService {
         },
       });
 
-      await tx.booking.update({
+      confirmedBooking = await tx.booking.update({
         where: { id: paymentIntent.bookingId },
         data: {
           status: BookingStatus.CONFIRMED,
         },
       });
     });
+
+    if (confirmedBooking) {
+      this.bookingEvents.emitConfirmed(confirmedBooking, {
+        paystackReference: data.reference,
+        paidAt: data.paidAt ?? null,
+        channel: data.channel ?? null,
+      });
+    }
   }
 
   private async handleChargeFailure(payload: PaystackWebhookEvent): Promise<void> {
@@ -185,9 +196,12 @@ export class PaystackService {
       return;
     }
 
+    let affectedBooking: Booking | null = null;
+    const failureReason = `Paystack reported ${payload.event}`;
     await this.prisma.$transaction(async (tx) => {
       const paymentIntent = await tx.paymentIntent.findUnique({
         where: { providerRef: data.reference },
+        include: { booking: true },
       });
 
       if (!paymentIntent) {
@@ -195,12 +209,14 @@ export class PaystackService {
         return;
       }
 
-      await this.markIntentFailure(
-        tx,
-        paymentIntent.id,
-        `Paystack reported ${payload.event}`,
-      );
+      affectedBooking = paymentIntent.booking;
+
+      await this.markIntentFailure(tx, paymentIntent.id, failureReason);
     });
+
+    if (affectedBooking) {
+      this.bookingEvents.emitPaymentFailed(affectedBooking, failureReason);
+    }
   }
 
   private async markIntentFailure(

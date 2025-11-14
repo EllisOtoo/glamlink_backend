@@ -32,5 +32,13 @@ services:
   #   ports:
   #     - "3000:3000"
 
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: glamlink-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+
 volumes:
   pgdata:
