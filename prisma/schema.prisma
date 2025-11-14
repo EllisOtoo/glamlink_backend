@@ -50,6 +50,7 @@ model User {
   vendor         Vendor?
   statusEvents   VendorStatusHistory[]  @relation("VendorStatusActor")
   reviewedVendors Vendor[]              @relation("VendorReviewedBy")
+  customerBookings Booking[]            @relation("CustomerBookings")
 }
 
 model EmailOtp {
@@ -184,6 +185,8 @@ model Booking {
   vendor            Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   serviceId         String
   service           Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customerUserId    String?
+  customer          User?          @relation("CustomerBookings", fields: [customerUserId], references: [id], onDelete: SetNull)
   customerName      String
   customerEmail     String?
   customerPhone     String?
@@ -203,6 +206,7 @@ model Booking {
   @@index([vendorId, scheduledStart])
   @@index([vendorId, status])
   @@index([serviceId, scheduledStart])
+  @@index([customerUserId, scheduledStart])
 }
 
 model PaymentIntent {
