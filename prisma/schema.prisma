@@ -32,6 +32,7 @@ model Vendor {
   availabilityOverrides AvailabilityOverride[]
   bookings              Booking[]
   calendarEntries       BookingCalendarEntry[]
+  reviews               Review[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -53,6 +54,8 @@ model User {
   reviewedVendors  Vendor[]               @relation("VendorReviewedBy")
   customerBookings Booking[]              @relation("CustomerBookings")
   calendarEntries  BookingCalendarEntry[] @relation("CalendarCustomerEntries")
+  pushTokens       PushToken[]
+  writtenReviews   Review[]
 }
 
 model EmailOtp {
@@ -182,30 +185,36 @@ enum AvailabilityOverrideType {
 }
 
 model Booking {
-  id              String                 @id @default(cuid())
-  reference       String                 @unique
-  vendorId        String
-  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  serviceId       String
-  service         Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  customerUserId  String?
-  customer        User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id], onDelete: SetNull)
-  customerName    String
-  customerEmail   String?
-  customerPhone   String?
-  status          BookingStatus          @default(PENDING)
-  scheduledStart  DateTime
-  scheduledEnd    DateTime
-  pricePesewas    Int
-  depositPesewas  Int
-  balancePesewas  Int
-  paymentIntent   PaymentIntent?
-  notes           String?
-  cancelledAt     DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  calendarEntries BookingCalendarEntry[]
+  id                 String                 @id @default(cuid())
+  reference          String                 @unique
+  vendorId           String
+  vendor             Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  serviceId          String
+  service            Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customerUserId     String?
+  customer           User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id], onDelete: SetNull)
+  customerName       String
+  customerEmail      String?
+  customerPhone      String?
+  status             BookingStatus          @default(PENDING)
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+  pricePesewas       Int
+  depositPesewas     Int
+  balancePesewas     Int
+  paymentIntent      PaymentIntent?
+  notes              String?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledBy        BookingCancelActor?
+  rescheduledAt      DateTime?
+  rescheduleCount    Int                    @default(0)
+  reminderSentAt     DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  calendarEntries    BookingCalendarEntry[]
+  review             Review?
 
   @@index([vendorId, scheduledStart])
   @@index([vendorId, status])
@@ -277,4 +286,51 @@ model BookingCalendarEntry {
 enum CalendarOwnerType {
   VENDOR
   CUSTOMER
+}
+
+model PushToken {
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token            String       @unique
+  platform         PushPlatform @default(EXPO)
+  deviceName       String?
+  appVersion       String?
+  lastRegisteredAt DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+enum PushPlatform {
+  IOS
+  ANDROID
+  WEB
+  EXPO
+}
+
+enum BookingCancelActor {
+  CUSTOMER
+  VENDOR
+  SYSTEM
+}
+
+model Review {
+  id             String    @id @default(cuid())
+  bookingId      String    @unique
+  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vendorId       String
+  vendor         Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  customerUserId String
+  customer       User      @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
+  rating         Int
+  comment        String?
+  reply          String?
+  repliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([vendorId])
+  @@index([customerUserId])
 }

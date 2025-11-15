@@ -1,16 +1,19 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, User } from '@prisma/client';
 import {
   Booking,
+  BookingCancelActor,
   BookingStatus,
   PaymentIntent,
   PaymentProvider,
   PaymentStatus,
   Service,
+  UserRole,
   Vendor,
   VendorStatus,
 } from '@prisma/client';
@@ -20,13 +23,16 @@ import { ServicesService } from '../services/services.service';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
 import { BookingEventsService } from '../events/booking-events.service';
 import { CalendarService } from '../calendar/calendar.service';
-import type { User } from '@prisma/client';
+import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
   BookingStatus.AWAITING_PAYMENT,
   BookingStatus.CONFIRMED,
 ];
+
+const MIN_MODIFICATION_NOTICE_HOURS = 24;
 
 @Injectable()
 export class BookingsService {
@@ -196,6 +202,28 @@ export class BookingsService {
     });
   }
 
+  async listCustomerCompletedBookings(userId: string, take = 10) {
+    const limit = Math.min(Math.max(take, 1), 50);
+
+    return this.prisma.booking.findMany({
+      where: {
+        customerUserId: userId,
+        status: BookingStatus.COMPLETED,
+      },
+      include: {
+        service: { select: { id: true, name: true, durationMinutes: true } },
+        vendor: {
+          select: { id: true, businessName: true, handle: true },
+        },
+        review: {
+          select: { id: true },
+        },
+      },
+      orderBy: { scheduledStart: 'desc' },
+      take: limit,
+    });
+  }
+
   async claimBookingsForCustomer(
     user: User,
     params: { email?: string; phone?: string },
@@ -252,6 +280,109 @@ export class BookingsService {
     await this.calendarService.syncEntriesForBookings(updatedBookings);
 
     return updatedBookings;
+  }
+
+  async rescheduleBooking(
+    user: User,
+    bookingId: string,
+    dto: RescheduleBookingDto,
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { vendor: true, service: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    this.assertBookingOwnership(user, booking);
+    this.assertWithinModificationWindow(booking.scheduledStart);
+
+    if (
+      booking.status !== BookingStatus.CONFIRMED &&
+      booking.status !== BookingStatus.AWAITING_PAYMENT
+    ) {
+      throw new BadRequestException(
+        'Only active bookings can be rescheduled.',
+      );
+    }
+
+    const newStart = new Date(dto.startAt);
+    if (Number.isNaN(newStart.getTime())) {
+      throw new BadRequestException('Provide a valid start time.');
+    }
+
+    const newStartIso = newStart.toISOString();
+    await this.ensureSlotIsAvailable(booking.vendor, booking.service, newStartIso);
+    const newEnd = new Date(
+      newStart.getTime() + booking.service.durationMinutes * 60 * 1000,
+    );
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.assertNoOverlap(
+        tx,
+        booking.vendorId,
+        newStart,
+        newEnd,
+        booking.id,
+      );
+
+      return tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          scheduledStart: newStart,
+          scheduledEnd: newEnd,
+          rescheduledAt: new Date(),
+          rescheduleCount: { increment: 1 },
+        },
+      });
+    });
+
+    await this.calendarService.syncEntriesForBooking(updated);
+    this.bookingEvents.emitRescheduled(updated, {
+      previousStart: booking.scheduledStart.toISOString(),
+      previousEnd: booking.scheduledEnd.toISOString(),
+    });
+
+    return updated;
+  }
+
+  async cancelBooking(user: User, bookingId: string, dto: CancelBookingDto) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { vendor: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException('Booking already cancelled.');
+    }
+
+    this.assertBookingOwnership(user, booking);
+    this.assertWithinModificationWindow(booking.scheduledStart);
+
+    const actor = this.resolveCancellationActor(user, booking);
+    const cancellationReason =
+      dto.reason && dto.reason.trim().length > 0 ? dto.reason.trim() : null;
+
+    const updated = await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancelledBy: actor,
+        cancellationReason,
+      },
+    });
+
+    await this.calendarService.syncEntriesForBooking(updated);
+    this.bookingEvents.emitCancelled(updated, { reason: cancellationReason });
+
+    return updated;
   }
 
   private async findServiceAndVendor(
@@ -311,10 +442,12 @@ export class BookingsService {
     vendorId: string,
     start: Date,
     end: Date,
+    excludeBookingId?: string,
   ) {
     const conflicting = await tx.booking.findFirst({
       where: {
         vendorId,
+        id: excludeBookingId ? { not: excludeBookingId } : undefined,
         status: { in: ACTIVE_BOOKING_STATUSES },
         scheduledStart: { lt: end },
         scheduledEnd: { gt: start },
@@ -349,5 +482,49 @@ export class BookingsService {
       throw new BadRequestException('Service price must be greater than zero.');
     }
     return amount;
+  }
+
+  private assertBookingOwnership(
+    user: User,
+    booking: Booking & { vendor: Vendor },
+  ) {
+    const isVendorOwner =
+      user.role === UserRole.VENDOR && booking.vendor.userId === user.id;
+    const isCustomerOwner = booking.customerUserId === user.id;
+
+    if (!isVendorOwner && !isCustomerOwner) {
+      throw new ForbiddenException('You cannot manage this booking.');
+    }
+
+    if (!booking.vendor.userId) {
+      throw new BadRequestException(
+        'Vendor account is not linked to an active user.',
+      );
+    }
+  }
+
+  private assertWithinModificationWindow(scheduledStart: Date) {
+    const now = new Date();
+    const noticeMs = scheduledStart.getTime() - now.getTime();
+    if (noticeMs < MIN_MODIFICATION_NOTICE_HOURS * 60 * 60 * 1000) {
+      throw new BadRequestException(
+        `Changes are only allowed ${MIN_MODIFICATION_NOTICE_HOURS}+ hours before the appointment.`,
+      );
+    }
+  }
+
+  private resolveCancellationActor(
+    user: User,
+    booking: Booking & { vendor: Vendor },
+  ): BookingCancelActor {
+    if (booking.vendor.userId === user.id) {
+      return BookingCancelActor.VENDOR;
+    }
+
+    if (booking.customerUserId === user.id) {
+      return BookingCancelActor.CUSTOMER;
+    }
+
+    return BookingCancelActor.SYSTEM;
   }
 }

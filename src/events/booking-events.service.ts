@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Booking, BookingStatus } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export enum BookingEventType {
   CREATED = 'booking.created',
   AWAITING_PAYMENT = 'booking.awaiting_payment',
   CONFIRMED = 'booking.confirmed',
   PAYMENT_FAILED = 'booking.payment_failed',
+  RESCHEDULED = 'booking.rescheduled',
+  CANCELLED = 'booking.cancelled',
+  REMINDER = 'booking.reminder',
 }
 
 export interface BookingDomainEvent {
@@ -23,6 +27,8 @@ export interface BookingDomainEvent {
 export class BookingEventsService {
   private readonly logger = new Logger(BookingEventsService.name);
 
+  constructor(private readonly notifications: NotificationsService) {}
+
   emit(event: BookingDomainEvent) {
     this.logger.log(
       `${event.type} | booking=${event.bookingId} vendor=${event.vendorId} service=${event.serviceId} status=${event.status}`,
@@ -33,6 +39,14 @@ export class BookingEventsService {
         timestamp: event.timestamp,
       })}`,
     );
+    void this.notifications
+      .handleBookingEvent(event)
+      .catch((error) =>
+        this.logger.error(
+          `Failed to handle booking event notification for ${event.bookingId}`,
+          error as Error,
+        ),
+      );
   }
 
   emitCreated(booking: Booking) {
@@ -58,6 +72,18 @@ export class BookingEventsService {
         ...extras,
       }),
     );
+  }
+
+  emitRescheduled(booking: Booking, extras?: Record<string, unknown>) {
+    this.emit(this.buildEvent(BookingEventType.RESCHEDULED, booking, extras));
+  }
+
+  emitCancelled(booking: Booking, extras?: Record<string, unknown>) {
+    this.emit(this.buildEvent(BookingEventType.CANCELLED, booking, extras));
+  }
+
+  emitReminder(booking: Booking, extras?: Record<string, unknown>) {
+    this.emit(this.buildEvent(BookingEventType.REMINDER, booking, extras));
   }
 
   private buildEvent(

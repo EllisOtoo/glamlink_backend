@@ -8,6 +8,7 @@ import { CalendarModule } from '../calendar/calendar.module';
 import { BookingsService } from './bookings.service';
 import { PublicBookingsController } from './public-bookings.controller';
 import { BookingsController } from './bookings.controller';
+import { BookingRemindersService } from './reminders.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { BookingsController } from './bookings.controller';
     CalendarModule,
   ],
   controllers: [PublicBookingsController, BookingsController],
-  providers: [BookingsService],
+  providers: [BookingsService, BookingRemindersService],
   exports: [BookingsService],
 })
 export class BookingsModule {}
