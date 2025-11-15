@@ -47,9 +47,16 @@ export class BookingEventsService {
     this.emit(this.buildEvent(BookingEventType.CONFIRMED, booking, extras));
   }
 
-  emitPaymentFailed(booking: Booking, reason: string) {
+  emitPaymentFailed(
+    booking: Booking,
+    reason: string,
+    extras?: Record<string, unknown>,
+  ) {
     this.emit(
-      this.buildEvent(BookingEventType.PAYMENT_FAILED, booking, { reason }),
+      this.buildEvent(BookingEventType.PAYMENT_FAILED, booking, {
+        reason,
+        ...extras,
+      }),
     );
   }
 

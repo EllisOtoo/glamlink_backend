@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma';
 import { ServicesService } from '../services/services.service';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
 import { BookingEventsService } from '../events/booking-events.service';
+import { CalendarService } from '../calendar/calendar.service';
 import type { User } from '@prisma/client';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
@@ -33,6 +34,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly servicesService: ServicesService,
     private readonly bookingEvents: BookingEventsService,
+    private readonly calendarService: CalendarService,
   ) {}
 
   async createPublicBooking(
@@ -127,6 +129,7 @@ export class BookingsService {
       throw new NotFoundException('Booking could not be retrieved after creation.');
     }
 
+    await this.calendarService.syncEntriesForBooking(persisted);
     this.bookingEvents.emitCreated(persisted);
     if (persisted.status === BookingStatus.AWAITING_PAYMENT) {
       this.bookingEvents.emitAwaitingPayment(persisted);
@@ -237,7 +240,7 @@ export class BookingsService {
       data: { customerUserId: user.id },
     });
 
-    return this.prisma.booking.findMany({
+    const updatedBookings = await this.prisma.booking.findMany({
       where: { id: { in: ids } },
       include: {
         service: { select: { id: true, name: true, durationMinutes: true } },
@@ -245,6 +248,10 @@ export class BookingsService {
       },
       orderBy: { scheduledStart: 'desc' },
     });
+
+    await this.calendarService.syncEntriesForBookings(updatedBookings);
+
+    return updatedBookings;
   }
 
   private async findServiceAndVendor(
