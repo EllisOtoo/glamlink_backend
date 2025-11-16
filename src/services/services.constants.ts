@@ -1,0 +1,2 @@
+export const MAX_SERVICE_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+export const MAX_SERVICE_IMAGES_PER_SERVICE = 12;

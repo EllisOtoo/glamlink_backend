@@ -10,7 +10,15 @@ import {
   VendorStatus,
   VendorStatusHistory,
 } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
+import { StorageService } from '../storage/storage.service';
+import {
+  normalizeMimeType,
+  resolveImageExtension,
+} from '../storage/media.helpers';
+import { MAX_VENDOR_LOGO_SIZE_BYTES } from './vendors.constants';
+import type { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
 
 export interface VendorProfileResult extends Vendor {
   documents: KycDocument[];
@@ -26,7 +34,10 @@ const REQUIRED_FIELDS_FOR_REVIEW: Array<keyof Vendor> = [
 
 @Injectable()
 export class VendorsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async findByUserId(userId: string): Promise<Vendor | null> {
     return this.prisma.vendor.findUnique({
@@ -351,6 +362,75 @@ export class VendorsService {
 
   private normalizeHandle(handle: string): string {
     return handle.trim().toLowerCase();
+  }
+
+  async requestLogoUploadUrl(
+    userId: string,
+    params: RequestLogoUploadUrlDto,
+  ) {
+    const vendor = await this.requireVendor(userId);
+    this.assertLogoConstraints(params.mimeType, params.sizeBytes);
+    const extension = resolveImageExtension(params.mimeType);
+    if (!extension) {
+      throw new BadRequestException('Unsupported image type for vendor logo.');
+    }
+    const storageKey = `vendors/${vendor.id}/logo/${randomUUID()}.${extension}`;
+    return this.storage.createPresignedUpload({
+      key: storageKey,
+      contentType: normalizeMimeType(params.mimeType),
+      metadata: {
+        vendorId: vendor.id,
+        purpose: 'logo',
+      },
+    });
+  }
+
+  async confirmLogoUpload(userId: string, storageKey: string): Promise<Vendor> {
+    const vendor = await this.requireVendor(userId);
+    const normalizedKey = storageKey.trim();
+    const expectedPrefix = `vendors/${vendor.id}/logo/`;
+    if (!normalizedKey.startsWith(expectedPrefix)) {
+      throw new BadRequestException('Logo storage key does not belong to this vendor.');
+    }
+
+    return this.prisma.vendor.update({
+      where: { id: vendor.id },
+      data: {
+        logoStorageKey: normalizedKey,
+        logoVersion: { increment: 1 },
+      },
+    });
+  }
+
+  private async requireVendor(userId: string): Promise<Vendor> {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    return vendor;
+  }
+
+  private assertLogoConstraints(mimeType?: string, sizeBytes?: number): void {
+    const normalizedMime = normalizeMimeType(mimeType);
+    if (!normalizedMime) {
+      throw new BadRequestException('Logo mime type is required.');
+    }
+
+    if (typeof sizeBytes !== 'number' || Number.isNaN(sizeBytes) || sizeBytes <= 0) {
+      throw new BadRequestException('Logo file size is required.');
+    }
+
+    if (sizeBytes > MAX_VENDOR_LOGO_SIZE_BYTES) {
+      throw new BadRequestException('Logo file exceeds the maximum size of 2MB.');
+    }
+
+    if (!resolveImageExtension(normalizedMime)) {
+      throw new BadRequestException('Unsupported logo image type.');
+    }
   }
 
   private defaultProfileInclude() {

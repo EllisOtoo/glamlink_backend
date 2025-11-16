@@ -1,6 +1,7 @@
 import { AvailabilityOverrideType } from '@prisma/client';
 import { ServicesService } from './services.service';
 import type { PrismaService } from '../prisma';
+import type { StorageService } from '../storage/storage.service';
 
 type MockedPrisma = {
   vendor: { findUnique: jest.Mock };
@@ -23,10 +24,20 @@ const createMockPrisma = (): MockedPrisma => ({
 describe('ServicesService availability slots', () => {
   let prisma: MockedPrisma;
   let service: ServicesService;
+  let storage: Partial<StorageService>;
 
   beforeEach(() => {
     prisma = createMockPrisma();
-    service = new ServicesService(prisma as unknown as PrismaService);
+    storage = {
+      createPresignedUpload: jest.fn(),
+      deleteObject: jest.fn(),
+      buildPublicUrl: jest.fn(),
+      createPresignedDownload: jest.fn(),
+    };
+    service = new ServicesService(
+      prisma as unknown as PrismaService,
+      storage as StorageService,
+    );
 
     prisma.vendor.findUnique.mockResolvedValue({ id: 'vnd_123' });
     prisma.service.findFirst.mockResolvedValue({

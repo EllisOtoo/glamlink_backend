@@ -18,6 +18,8 @@ model Vendor {
   locationArea          String?
   instagramHandle       String?
   websiteUrl            String?
+  logoStorageKey        String?
+  logoVersion           Int                    @default(0)
   kycSubmittedAt        DateTime?
   verifiedAt            DateTime?
   rejectionReason       String?
@@ -148,8 +150,22 @@ model Service {
   updatedAt       DateTime               @updatedAt
   bookings        Booking[]
   calendarEntries BookingCalendarEntry[]
+  images          ServiceImage[]
 
   @@index([vendorId, isActive])
+}
+
+model ServiceImage {
+  id         String   @id @default(cuid())
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  storageKey String
+  caption    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([serviceId])
 }
 
 model WeeklyAvailability {
