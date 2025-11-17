@@ -76,6 +76,9 @@ export class VendorsService {
       locationArea?: string;
       instagramHandle?: string;
       websiteUrl?: string;
+      latitude?: number;
+      longitude?: number;
+      serviceRadiusKm?: number;
     },
   ): Promise<Vendor> {
     const normalizedHandle = payload.handle
@@ -107,6 +110,14 @@ export class VendorsService {
       locationArea: payload.locationArea,
       instagramHandle: payload.instagramHandle,
       websiteUrl: payload.websiteUrl,
+      latitude:
+        typeof payload.latitude === 'number' ? payload.latitude : undefined,
+      longitude:
+        typeof payload.longitude === 'number' ? payload.longitude : undefined,
+      serviceRadiusKm:
+        typeof payload.serviceRadiusKm === 'number'
+          ? payload.serviceRadiusKm
+          : undefined,
     };
 
     return this.prisma.$transaction(async (tx) => {
@@ -132,6 +143,14 @@ export class VendorsService {
             locationArea: payload.locationArea,
             instagramHandle: payload.instagramHandle,
             websiteUrl: payload.websiteUrl,
+            latitude:
+              typeof payload.latitude === 'number' ? payload.latitude : undefined,
+            longitude:
+              typeof payload.longitude === 'number' ? payload.longitude : undefined,
+            serviceRadiusKm:
+              typeof payload.serviceRadiusKm === 'number'
+                ? payload.serviceRadiusKm
+                : undefined,
           },
         });
       }

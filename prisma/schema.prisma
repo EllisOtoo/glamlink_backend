@@ -18,6 +18,9 @@ model Vendor {
   locationArea          String?
   instagramHandle       String?
   websiteUrl            String?
+  latitude              Float?
+  longitude             Float?
+  serviceRadiusKm       Int?                  @default(15)
   logoStorageKey        String?
   logoVersion           Int                    @default(0)
   kycSubmittedAt        DateTime?
