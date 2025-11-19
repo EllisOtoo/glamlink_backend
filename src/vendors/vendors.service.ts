@@ -9,6 +9,7 @@ import {
   Vendor,
   VendorStatus,
   VendorStatusHistory,
+  StaffMember,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
@@ -19,11 +20,34 @@ import {
 } from '../storage/media.helpers';
 import { MAX_VENDOR_LOGO_SIZE_BYTES } from './vendors.constants';
 import type { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
+import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
+import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
+import { CreateSeatDto } from './dto/create-seat.dto';
+import { UpdateSeatDto } from './dto/update-seat.dto';
 
 export interface VendorProfileResult extends Vendor {
   documents: KycDocument[];
   statusHistory: VendorStatusHistory[];
 }
+
+type SeatWithRelations = Prisma.ServiceSeatGetPayload<{
+  include: {
+    staff: true;
+    services: {
+      include: {
+        service: {
+          select: {
+            id: true;
+            name: true;
+            priceCents: true;
+            durationMinutes: true;
+            isActive: true;
+          };
+        };
+      };
+    };
+  };
+}>;
 
 const REQUIRED_FIELDS_FOR_REVIEW: Array<keyof Vendor> = [
   'businessName',
@@ -85,6 +109,8 @@ export class VendorsService {
       ? this.normalizeHandle(payload.handle)
       : undefined;
 
+    console.log(payload, 'payload');
+
     if (!payload.businessName) {
       const existing = await this.findByUserId(userId);
       if (!existing) {
@@ -144,9 +170,13 @@ export class VendorsService {
             instagramHandle: payload.instagramHandle,
             websiteUrl: payload.websiteUrl,
             latitude:
-              typeof payload.latitude === 'number' ? payload.latitude : undefined,
+              typeof payload.latitude === 'number'
+                ? payload.latitude
+                : undefined,
             longitude:
-              typeof payload.longitude === 'number' ? payload.longitude : undefined,
+              typeof payload.longitude === 'number'
+                ? payload.longitude
+                : undefined,
             serviceRadiusKm:
               typeof payload.serviceRadiusKm === 'number'
                 ? payload.serviceRadiusKm
@@ -239,6 +269,153 @@ export class VendorsService {
         mimeType: payload.mimeType,
         sizeBytes: payload.sizeBytes,
       },
+    });
+  }
+
+  async listStaffMembers(userId: string): Promise<StaffMember[]> {
+    const vendor = await this.requireVendor(userId);
+    return this.prisma.staffMember.findMany({
+      where: { vendorId: vendor.id },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createStaffMember(
+    userId: string,
+    payload: CreateStaffMemberDto,
+  ): Promise<StaffMember> {
+    const vendor = await this.requireVendor(userId);
+    return this.prisma.staffMember.create({
+      data: {
+        vendorId: vendor.id,
+        name: payload.name,
+        bio: payload.bio,
+        avatarStorageKey: payload.avatarStorageKey,
+        specialties: payload.specialties ?? [],
+        isActive: payload.isActive ?? true,
+      },
+    });
+  }
+
+  async updateStaffMember(
+    userId: string,
+    staffId: string,
+    payload: UpdateStaffMemberDto,
+  ): Promise<StaffMember> {
+    const vendor = await this.requireVendor(userId);
+    await this.ensureStaffBelongsToVendor(staffId, vendor.id);
+
+    return this.prisma.staffMember.update({
+      where: { id: staffId },
+      data: {
+        name: payload.name,
+        bio: payload.bio,
+        avatarStorageKey: payload.avatarStorageKey,
+        specialties: payload.specialties,
+        isActive: payload.isActive,
+      },
+    });
+  }
+
+  async archiveStaffMember(userId: string, staffId: string): Promise<void> {
+    const vendor = await this.requireVendor(userId);
+    await this.ensureStaffBelongsToVendor(staffId, vendor.id);
+    await this.prisma.staffMember.update({
+      where: { id: staffId },
+      data: { isActive: false },
+    });
+  }
+
+  async listSeats(userId: string): Promise<SeatWithRelations[]> {
+    const vendor = await this.requireVendor(userId);
+    return this.prisma.serviceSeat.findMany({
+      where: { vendorId: vendor.id },
+      orderBy: { createdAt: 'asc' },
+      include: this.defaultSeatInclude(),
+    });
+  }
+
+  async createSeat(
+    userId: string,
+    payload: CreateSeatDto,
+  ): Promise<SeatWithRelations> {
+    const vendor = await this.requireVendor(userId);
+    if (payload.staffId) {
+      await this.ensureStaffBelongsToVendor(payload.staffId, vendor.id);
+    }
+    if (payload.serviceIds?.length) {
+      await this.ensureServicesBelongToVendor(payload.serviceIds, vendor.id);
+    }
+
+    return this.prisma.serviceSeat.create({
+      data: {
+        vendorId: vendor.id,
+        label: payload.label,
+        description: payload.description,
+        capacity: payload.capacity ?? 1,
+        staffId: payload.staffId,
+        isActive: payload.isActive ?? true,
+        services: payload.serviceIds?.length
+          ? {
+              create: payload.serviceIds.map((serviceId) => ({ serviceId })),
+            }
+          : undefined,
+      },
+      include: this.defaultSeatInclude(),
+    });
+  }
+
+  async updateSeat(
+    userId: string,
+    seatId: string,
+    payload: UpdateSeatDto,
+  ): Promise<SeatWithRelations> {
+    const vendor = await this.requireVendor(userId);
+    await this.ensureSeatBelongsToVendor(seatId, vendor.id);
+
+    if (payload.staffId) {
+      await this.ensureStaffBelongsToVendor(payload.staffId, vendor.id);
+    }
+    if (payload.serviceIds !== undefined) {
+      if (payload.serviceIds.length) {
+        await this.ensureServicesBelongToVendor(payload.serviceIds, vendor.id);
+      }
+    }
+
+    const servicesRelation =
+      payload.serviceIds !== undefined
+        ? {
+            deleteMany: {},
+            ...(payload.serviceIds.length
+              ? {
+                  create: payload.serviceIds.map((serviceId) => ({
+                    serviceId,
+                  })),
+                }
+              : {}),
+          }
+        : undefined;
+
+    return this.prisma.serviceSeat.update({
+      where: { id: seatId },
+      data: {
+        label: payload.label,
+        description: payload.description,
+        capacity: payload.capacity,
+        staffId: payload.staffId,
+        isActive: payload.isActive,
+        services: servicesRelation,
+      },
+      include: this.defaultSeatInclude(),
+    });
+  }
+
+  async archiveSeat(userId: string, seatId: string): Promise<void> {
+    const vendor = await this.requireVendor(userId);
+    await this.ensureSeatBelongsToVendor(seatId, vendor.id);
+    await this.prisma.serviceSeat.update({
+      where: { id: seatId },
+      data: { isActive: false },
     });
   }
 
@@ -383,10 +560,7 @@ export class VendorsService {
     return handle.trim().toLowerCase();
   }
 
-  async requestLogoUploadUrl(
-    userId: string,
-    params: RequestLogoUploadUrlDto,
-  ) {
+  async requestLogoUploadUrl(userId: string, params: RequestLogoUploadUrlDto) {
     const vendor = await this.requireVendor(userId);
     this.assertLogoConstraints(params.mimeType, params.sizeBytes);
     const extension = resolveImageExtension(params.mimeType);
@@ -409,7 +583,9 @@ export class VendorsService {
     const normalizedKey = storageKey.trim();
     const expectedPrefix = `vendors/${vendor.id}/logo/`;
     if (!normalizedKey.startsWith(expectedPrefix)) {
-      throw new BadRequestException('Logo storage key does not belong to this vendor.');
+      throw new BadRequestException(
+        'Logo storage key does not belong to this vendor.',
+      );
     }
 
     return this.prisma.vendor.update({
@@ -433,18 +609,85 @@ export class VendorsService {
     return vendor;
   }
 
+  private async ensureStaffBelongsToVendor(staffId: string, vendorId: string) {
+    if (!staffId) {
+      return;
+    }
+    const staff = await this.prisma.staffMember.findFirst({
+      where: { id: staffId, vendorId },
+    });
+    if (!staff) {
+      throw new NotFoundException('Staff member not found for this vendor.');
+    }
+  }
+
+  private async ensureSeatBelongsToVendor(seatId: string, vendorId: string) {
+    const seat = await this.prisma.serviceSeat.findFirst({
+      where: { id: seatId, vendorId },
+    });
+    if (!seat) {
+      throw new NotFoundException('Seat not found for this vendor.');
+    }
+  }
+
+  private async ensureServicesBelongToVendor(
+    serviceIds: string[],
+    vendorId: string,
+  ) {
+    if (!serviceIds.length) {
+      return;
+    }
+    const count = await this.prisma.service.count({
+      where: {
+        vendorId,
+        id: { in: serviceIds },
+      },
+    });
+
+    if (count !== serviceIds.length) {
+      throw new BadRequestException(
+        'One or more services are invalid for this vendor.',
+      );
+    }
+  }
+
+  private defaultSeatInclude() {
+    return {
+      staff: true,
+      services: {
+        include: {
+          service: {
+            select: {
+              id: true,
+              name: true,
+              priceCents: true,
+              durationMinutes: true,
+              isActive: true,
+            },
+          },
+        },
+      },
+    } satisfies Prisma.ServiceSeatInclude;
+  }
+
   private assertLogoConstraints(mimeType?: string, sizeBytes?: number): void {
     const normalizedMime = normalizeMimeType(mimeType);
     if (!normalizedMime) {
       throw new BadRequestException('Logo mime type is required.');
     }
 
-    if (typeof sizeBytes !== 'number' || Number.isNaN(sizeBytes) || sizeBytes <= 0) {
+    if (
+      typeof sizeBytes !== 'number' ||
+      Number.isNaN(sizeBytes) ||
+      sizeBytes <= 0
+    ) {
       throw new BadRequestException('Logo file size is required.');
     }
 
     if (sizeBytes > MAX_VENDOR_LOGO_SIZE_BYTES) {
-      throw new BadRequestException('Logo file exceeds the maximum size of 2MB.');
+      throw new BadRequestException(
+        'Logo file exceeds the maximum size of 2MB.',
+      );
     }
 
     if (!resolveImageExtension(normalizedMime)) {

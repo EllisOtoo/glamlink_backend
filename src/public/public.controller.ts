@@ -1,7 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { HighlightVendorsQueryDto } from './dto/highlight-vendors.dto';
 import { DiscoverServicesQueryDto } from './dto/discover-services.dto';
-import { PublicCatalogService, ServiceSummary, VendorSummary, NearbyServiceSummary } from './public.service';
+import { PublicCatalogService, ServiceSummary, VendorSummary, NearbyServiceSummary, ServiceDetailSummary } from './public.service';
 import { NearbyServicesQueryDto } from './dto/nearby-services.dto';
 
 @Controller('public/catalog')
@@ -27,5 +27,12 @@ export class PublicCatalogController {
     @Query() query: NearbyServicesQueryDto,
   ): Promise<NearbyServiceSummary[]> {
     return this.catalog.discoverNearbyServices(query);
+  }
+
+  @Get('services/:serviceId')
+  serviceById(
+    @Param('serviceId') serviceId: string,
+  ): Promise<ServiceDetailSummary> {
+    return this.catalog.getServiceById(serviceId);
   }
 }

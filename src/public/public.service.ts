@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { VendorStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { StorageService } from '../storage/storage.service';
@@ -39,6 +39,24 @@ export interface NearbyServiceSummary extends ServiceSummary {
   distanceKm: number;
 }
 
+export interface SeatStaffSummary {
+  id: string;
+  name: string;
+  bio: string | null;
+}
+
+export interface SeatSummary {
+  id: string;
+  label: string;
+  description: string | null;
+  capacity: number;
+  staff: SeatStaffSummary | null;
+}
+
+export interface ServiceDetailSummary extends ServiceSummary {
+  seats: SeatSummary[];
+}
+
 type ReviewAggregate = {
   vendorId: string;
   _avg: { rating: number | null };
@@ -53,6 +71,7 @@ const SERVICE_INCLUDE = {
       handle: true,
       locationArea: true,
       bio: true,
+      status: true,
       logoStorageKey: true,
       logoVersion: true,
       latitude: true,
@@ -336,6 +355,46 @@ export class PublicCatalogService {
     };
   }
 
+  private async listSeatsForService(
+    vendorId: string,
+    serviceId: string,
+  ): Promise<SeatSummary[]> {
+    const seats = await this.prisma.serviceSeat.findMany({
+      where: {
+        vendorId,
+        isActive: true,
+        OR: [
+          { services: { some: { serviceId } } },
+          { services: { none: {} } },
+        ],
+      },
+      include: {
+        staff: {
+          select: {
+            id: true,
+            name: true,
+            bio: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return seats.map((seat) => ({
+      id: seat.id,
+      label: seat.label,
+      description: seat.description ?? null,
+      capacity: seat.capacity && seat.capacity > 0 ? seat.capacity : 1,
+      staff: seat.staff
+        ? {
+            id: seat.staff.id,
+            name: seat.staff.name,
+            bio: seat.staff.bio ?? null,
+          }
+        : null,
+    }));
+  }
+
   private calculateDistanceKm(
     lat1: number,
     lon1: number,
@@ -354,5 +413,44 @@ export class PublicCatalogService {
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round((R * c + Number.EPSILON) * 100) / 100;
+  }
+
+  async getServiceById(serviceId: string): Promise<ServiceDetailSummary> {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: SERVICE_INCLUDE,
+    });
+
+    if (!service || !service.isActive || !service.vendor) {
+      throw new NotFoundException('Service not found.');
+    }
+
+    if (service.vendor.status !== VendorStatus.VERIFIED) {
+      throw new BadRequestException('Vendor is not available for booking.');
+    }
+
+    const reviewAggregate = await this.prisma.review.aggregate({
+      where: { vendorId: service.vendor.id },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    const summary = this.mapServiceSummary(service, [
+      {
+        vendorId: service.vendor.id,
+        _avg: { rating: reviewAggregate._avg.rating ?? null },
+        _count: { rating: reviewAggregate._count.rating ?? 0 },
+      },
+    ]);
+
+    const seats = await this.listSeatsForService(
+      service.vendor.id,
+      service.id,
+    );
+
+    return {
+      ...summary,
+      seats,
+    };
   }
 }

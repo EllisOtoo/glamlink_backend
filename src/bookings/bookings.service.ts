@@ -82,7 +82,18 @@ export class BookingsService {
     const reference = `book_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
     const booking = await this.prisma.$transaction(async (tx) => {
-      await this.assertNoOverlap(tx, vendor.id, start, scheduledEnd);
+      const seatAssignment = await this.resolveSeatAssignment(
+        tx,
+        vendor.id,
+        service.id,
+        start,
+        scheduledEnd,
+        dto.seatId,
+      );
+
+      if (!seatAssignment.hasSeatsConfigured) {
+        await this.assertNoOverlap(tx, vendor.id, start, scheduledEnd);
+      }
 
       const created = await tx.booking.create({
         data: {
@@ -101,6 +112,8 @@ export class BookingsService {
           depositPesewas: deposit,
           balancePesewas: balance,
           notes: dto.notes?.trim() ?? null,
+          seatId: seatAssignment.seatId,
+          staffId: seatAssignment.staffId,
         },
       });
 
@@ -416,6 +429,112 @@ export class BookingsService {
     }
 
     return { service, vendor: service.vendor };
+  }
+
+  private async resolveSeatAssignment(
+    tx: Prisma.TransactionClient,
+    vendorId: string,
+    serviceId: string,
+    start: Date,
+    end: Date,
+    requestedSeatId?: string,
+  ): Promise<{
+    seatId: string | null;
+    staffId: string | null;
+    hasSeatsConfigured: boolean;
+  }> {
+    const seats = await tx.serviceSeat.findMany({
+      where: {
+        vendorId,
+        isActive: true,
+        OR: [
+          { services: { some: { serviceId } } },
+          { services: { none: {} } },
+        ],
+      },
+      include: {
+        staff: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (seats.length === 0) {
+      return { seatId: null, staffId: null, hasSeatsConfigured: false };
+    }
+
+    const legacyOverlap = await tx.booking.findFirst({
+      where: {
+        vendorId,
+        seatId: null,
+        status: { in: ACTIVE_BOOKING_STATUSES },
+        scheduledStart: { lt: end },
+        scheduledEnd: { gt: start },
+      },
+    });
+
+    if (legacyOverlap) {
+      throw new BadRequestException(
+        'This time slot is no longer available.',
+      );
+    }
+
+    const seatIds = seats.map((seat) => seat.id);
+    const overlappingCounts = seatIds.length
+      ? await tx.booking.groupBy({
+          by: ['seatId'],
+          where: {
+            seatId: { in: seatIds },
+            status: { in: ACTIVE_BOOKING_STATUSES },
+            scheduledStart: { lt: end },
+            scheduledEnd: { gt: start },
+          },
+          _count: { _all: true },
+        })
+      : [];
+
+    const seatAvailable = (seat: typeof seats[number]) => {
+      const capacity = seat.capacity && seat.capacity > 0 ? seat.capacity : 1;
+      const active = overlappingCounts.find(
+        (entry) => entry.seatId === seat.id,
+      );
+      const currentCount = active?._count._all ?? 0;
+      return currentCount < capacity;
+    };
+
+    const findSeatOrThrow = (seatId: string) => {
+      const seat = seats.find((candidate) => candidate.id === seatId);
+      if (!seat) {
+        throw new BadRequestException('Selected seat is not available.');
+      }
+      if (!seatAvailable(seat)) {
+        throw new BadRequestException(
+          'Selected seat is no longer free for that slot.',
+        );
+      }
+      return seat;
+    };
+
+    if (requestedSeatId) {
+      const seat = findSeatOrThrow(requestedSeatId);
+      return {
+        seatId: seat.id,
+        staffId: seat.staffId ?? null,
+        hasSeatsConfigured: true,
+      };
+    }
+
+    const availableSeat = seats.find((seat) => seatAvailable(seat));
+    if (!availableSeat) {
+      throw new BadRequestException(
+        'No seats are available for this time slot.',
+      );
+    }
+
+    return {
+      seatId: availableSeat.id,
+      staffId: availableSeat.staffId ?? null,
+      hasSeatsConfigured: true,
+    };
   }
 
   private async ensureSlotIsAvailable(

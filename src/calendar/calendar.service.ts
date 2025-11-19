@@ -11,6 +11,8 @@ type CalendarBookingShape = Pick<
   | 'scheduledStart'
   | 'scheduledEnd'
   | 'status'
+  | 'seatId'
+  | 'staffId'
 >;
 
 @Injectable()
@@ -46,6 +48,8 @@ export class CalendarService {
       scheduledStart: booking.scheduledStart,
       scheduledEnd: booking.scheduledEnd,
       status: booking.status,
+      seatId: booking.seatId,
+      staffId: booking.staffId,
     };
   }
 

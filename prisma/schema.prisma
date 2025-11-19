@@ -35,6 +35,8 @@ model Vendor {
   services              Service[]
   weeklyHours           WeeklyAvailability[]
   availabilityOverrides AvailabilityOverride[]
+  staff                 StaffMember[]
+  seats                 ServiceSeat[]
   bookings              Booking[]
   calendarEntries       BookingCalendarEntry[]
   reviews               Review[]
@@ -154,6 +156,7 @@ model Service {
   bookings        Booking[]
   calendarEntries BookingCalendarEntry[]
   images          ServiceImage[]
+  seatLinks       ServiceSeatService[]
 
   @@index([vendorId, isActive])
 }
@@ -230,6 +233,10 @@ model Booking {
   rescheduleCount    Int                    @default(0)
   reminderSentAt     DateTime?
   completedAt        DateTime?
+  seatId             String?
+  seat               ServiceSeat?           @relation(fields: [seatId], references: [id], onDelete: SetNull)
+  staffId            String?
+  staff              StaffMember?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   calendarEntries    BookingCalendarEntry[]
@@ -239,6 +246,8 @@ model Booking {
   @@index([vendorId, status])
   @@index([serviceId, scheduledStart])
   @@index([customerUserId, scheduledStart])
+  @@index([seatId, scheduledStart])
+  @@index([staffId, scheduledStart])
 }
 
 model PaymentIntent {
@@ -291,6 +300,10 @@ model BookingCalendarEntry {
   customer       User?             @relation("CalendarCustomerEntries", fields: [customerUserId], references: [id], onDelete: SetNull)
   serviceId      String
   service        Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  seatId         String?
+  seat           ServiceSeat?      @relation(fields: [seatId], references: [id], onDelete: SetNull)
+  staffId        String?
+  staff          StaffMember?      @relation(fields: [staffId], references: [id], onDelete: SetNull)
   scheduledStart DateTime
   scheduledEnd   DateTime
   status         BookingStatus
@@ -300,6 +313,56 @@ model BookingCalendarEntry {
   @@unique([bookingId, ownerType])
   @@index([vendorId, scheduledStart])
   @@index([customerUserId, scheduledStart])
+  @@index([seatId, scheduledStart])
+  @@index([staffId, scheduledStart])
+}
+
+model StaffMember {
+  id              String        @id @default(cuid())
+  vendorId        String
+  vendor          Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name            String
+  bio             String?
+  avatarStorageKey String?
+  specialties     String[]      @default([])
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  seats           ServiceSeat[]
+  bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+
+  @@index([vendorId, isActive])
+}
+
+model ServiceSeat {
+  id              String                 @id @default(cuid())
+  vendorId        String
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  label           String
+  description     String?
+  capacity        Int                    @default(1)
+  isActive        Boolean                @default(true)
+  staffId         String?
+  staff           StaffMember?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+  services        ServiceSeatService[]
+
+  @@index([vendorId, isActive])
+  @@index([staffId])
+}
+
+model ServiceSeatService {
+  serviceId String
+  seatId    String
+  service   Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  seat      ServiceSeat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, seatId])
+  @@index([seatId])
 }
 
 enum CalendarOwnerType {

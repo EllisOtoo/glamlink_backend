@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -21,6 +22,10 @@ import { VerifiedVendorGuard } from './guards/verified-vendor.guard';
 import { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
 import { ConfirmLogoDto } from './dto/confirm-logo.dto';
 import { StorageService } from '../storage/storage.service';
+import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
+import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
+import { CreateSeatDto } from './dto/create-seat.dto';
+import { UpdateSeatDto } from './dto/update-seat.dto';
 
 @Controller()
 export class VendorsController {
@@ -89,6 +94,81 @@ export class VendorsController {
     @Body() dto: CreateKycDocumentDto,
   ) {
     return this.vendorsService.addKycDocument(user.id, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Get('vendors/me/staff')
+  listStaff(@CurrentUser() user: User) {
+    return this.vendorsService.listStaffMembers(user.id);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/staff')
+  createStaff(
+    @CurrentUser() user: User,
+    @Body() dto: CreateStaffMemberDto,
+  ) {
+    return this.vendorsService.createStaffMember(user.id, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Put('vendors/me/staff/:staffId')
+  updateStaff(
+    @CurrentUser() user: User,
+    @Param('staffId') staffId: string,
+    @Body() dto: UpdateStaffMemberDto,
+  ) {
+    return this.vendorsService.updateStaffMember(user.id, staffId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Delete('vendors/me/staff/:staffId')
+  async archiveStaff(
+    @CurrentUser() user: User,
+    @Param('staffId') staffId: string,
+  ) {
+    await this.vendorsService.archiveStaffMember(user.id, staffId);
+    return { status: 'ok' };
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Get('vendors/me/seats')
+  listSeats(@CurrentUser() user: User) {
+    return this.vendorsService.listSeats(user.id);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/seats')
+  createSeat(@CurrentUser() user: User, @Body() dto: CreateSeatDto) {
+    return this.vendorsService.createSeat(user.id, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Put('vendors/me/seats/:seatId')
+  updateSeat(
+    @CurrentUser() user: User,
+    @Param('seatId') seatId: string,
+    @Body() dto: UpdateSeatDto,
+  ) {
+    return this.vendorsService.updateSeat(user.id, seatId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Delete('vendors/me/seats/:seatId')
+  async archiveSeat(
+    @CurrentUser() user: User,
+    @Param('seatId') seatId: string,
+  ) {
+    await this.vendorsService.archiveSeat(user.id, seatId);
+    return { status: 'ok' };
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard, VerifiedVendorGuard)
