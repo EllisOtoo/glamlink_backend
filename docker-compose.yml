@@ -17,20 +17,23 @@ services:
       timeout: 5s
       retries: 5
 
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: glamlink-api
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #   environment:
-  #     NODE_ENV: production
-  #     DATABASE_URL: postgresql://postgres:postgres@db:5432/glamlink?schema=public
-  #     PORT: 3000
-  #   ports:
-  #     - "3000:3000"
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: glamlink-api
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/glamlink?schema=public
+      PORT: 3000
+      SMTP_HOST: mailhog
+    ports:
+      - "3000:3000"
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -38,8 +41,8 @@ services:
     container_name: glamlink-mailhog
     restart: unless-stopped
     ports:
-      - "1025:1025"  # SMTP server
-      - "8025:8025"  # Web UI
+      - "1025:1025" # SMTP server
+      - "8025:8025" # Web UI
 
 volumes:
   pgdata:
