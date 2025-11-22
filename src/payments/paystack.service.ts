@@ -9,6 +9,8 @@ import {
   PaymentIntent,
 } from '@prisma/client';
 import { PrismaService } from '../prisma';
+import { BookingEventsService } from '../events/booking-events.service';
+import { CalendarService } from '../calendar/calendar.service';
 
 export interface PaystackCheckoutPayload {
   publicKey: string;
@@ -39,6 +41,8 @@ export class PaystackService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly bookingEvents: BookingEventsService,
+    private readonly calendarService: CalendarService,
   ) {}
 
   getPublicKey(): string {
@@ -122,6 +126,8 @@ export class PaystackService {
     }
 
     const currency = (data.currency ?? 'GHS').toUpperCase();
+    let confirmedBooking: Booking | null = null;
+    let failedBooking: { booking: Booking; reason: string } | null = null;
     await this.prisma.$transaction(async (tx) => {
       const paymentIntent = await tx.paymentIntent.findUnique({
         where: { providerRef: data.reference },
@@ -144,7 +150,13 @@ export class PaystackService {
         this.logger.warn(
           `Paystack amount mismatch for reference ${data.reference} (expected ${paymentIntent.amountPesewas}, got ${data.amount}).`,
         );
-        await this.markIntentFailure(tx, paymentIntent.id, 'Amount mismatch');
+        const updatedBooking =
+          (await this.markIntentFailure(tx, paymentIntent, 'Amount mismatch')) ??
+          paymentIntent.booking;
+        failedBooking = {
+          booking: updatedBooking,
+          reason: 'Amount mismatch',
+        };
         return;
       }
 
@@ -152,7 +164,13 @@ export class PaystackService {
         this.logger.warn(
           `Paystack currency mismatch for reference ${data.reference} (expected ${paymentIntent.currency}, got ${currency}).`,
         );
-        await this.markIntentFailure(tx, paymentIntent.id, 'Currency mismatch');
+        const updatedBooking =
+          (await this.markIntentFailure(tx, paymentIntent, 'Currency mismatch')) ??
+          paymentIntent.booking;
+        failedBooking = {
+          booking: updatedBooking,
+          reason: 'Currency mismatch',
+        };
         return;
       }
 
@@ -169,13 +187,31 @@ export class PaystackService {
         },
       });
 
-      await tx.booking.update({
+      confirmedBooking = await tx.booking.update({
         where: { id: paymentIntent.bookingId },
         data: {
           status: BookingStatus.CONFIRMED,
         },
       });
     });
+
+    if (failedBooking) {
+      const { booking, reason } = failedBooking as { booking: Booking; reason: string };
+      this.bookingEvents.emitPaymentFailed(booking, reason, {
+        slotReleased: booking.status === BookingStatus.CANCELLED,
+      });
+      await this.calendarService.syncEntriesForBooking(booking);
+      return;
+    }
+
+    if (confirmedBooking) {
+      this.bookingEvents.emitConfirmed(confirmedBooking, {
+        paystackReference: data.reference,
+        paidAt: data.paidAt ?? null,
+        channel: data.channel ?? null,
+      });
+      await this.calendarService.syncEntriesForBooking(confirmedBooking);
+    }
   }
 
   private async handleChargeFailure(payload: PaystackWebhookEvent): Promise<void> {
@@ -185,9 +221,12 @@ export class PaystackService {
       return;
     }
 
+    let affectedBooking: Booking | null = null;
+    const failureReason = `Paystack reported ${payload.event}`;
     await this.prisma.$transaction(async (tx) => {
       const paymentIntent = await tx.paymentIntent.findUnique({
         where: { providerRef: data.reference },
+        include: { booking: true },
       });
 
       if (!paymentIntent) {
@@ -195,26 +234,48 @@ export class PaystackService {
         return;
       }
 
-      await this.markIntentFailure(
-        tx,
-        paymentIntent.id,
-        `Paystack reported ${payload.event}`,
-      );
+      const updatedBooking =
+        (await this.markIntentFailure(tx, paymentIntent, failureReason)) ??
+        paymentIntent.booking;
+      affectedBooking = updatedBooking;
     });
+
+    if (affectedBooking) {
+      const booking = affectedBooking as Booking;
+      this.bookingEvents.emitPaymentFailed(booking, failureReason, {
+        slotReleased: booking.status === BookingStatus.CANCELLED,
+      });
+      await this.calendarService.syncEntriesForBooking(booking);
+    }
   }
 
   private async markIntentFailure(
     tx: Prisma.TransactionClient,
-    paymentIntentId: string,
+    paymentIntent: PaymentIntent & { booking: Booking },
     reason: string,
-  ) {
+  ): Promise<Booking | null> {
     await tx.paymentIntent.update({
-      where: { id: paymentIntentId },
+      where: { id: paymentIntent.id },
       data: {
         status: PaymentStatus.FAILED,
         lastError: reason,
       },
     });
+
+    if (
+      paymentIntent.booking.status === BookingStatus.AWAITING_PAYMENT ||
+      paymentIntent.booking.status === BookingStatus.PENDING
+    ) {
+      return tx.booking.update({
+        where: { id: paymentIntent.bookingId },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+      });
+    }
+
+    return null;
   }
 
   private mergeMetadata(

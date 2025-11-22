@@ -1,33 +1,29 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-
-Application code lives in `src/`, with `main.ts` bootstrapping NestJS and feature modules grouped in subdirectories alongside their controllers and services. End-to-end specs and helpers sit under `test/`, while generated bundles land in `dist/` after builds and should never be committed. Use the `prisma/` directory for schema and migration assets, and keep supplemental architecture notes in `docs/`.
+- `src/` contains the NestJS entrypoint (`main.ts`), the root module (`app.module.ts`), and feature scaffolding (`app.controller.ts`, `app.service.ts`). Place new modules in subdirectories under `src/` with accompanying controllers and providers.
+- `test/` hosts end-to-end specs and `jest-e2e.json`. Keep integration helpers here so the production bundle stays lean.
+- Build artifacts land in `dist/` after `pnpm build`; this directory is transient and should not be versioned.
+- Repo-level configs (`nest-cli.json`, `tsconfig*.json`, `eslint.config.mjs`) define path aliases, compilation targets, and linting rules—update them in tandem when introducing new libraries or aliases.
 
 ## Build, Test, and Development Commands
-
-Run `pnpm install` to sync dependencies with the lockfile. Use `pnpm start:dev` for hot-reload development, and `pnpm build` plus `pnpm start:prod` to validate the compiled output in `dist/`. Execute `pnpm lint` and `pnpm format` before committing to catch style regressions, and reach for `pnpm prisma migrate dev` when evolving the database schema.
+- `pnpm install` – install dependencies respecting the checked-in lockfile.
+- `pnpm start:dev` – run the API with live reload via `nest start --watch`.
+- `pnpm build` – emit a production-ready bundle to `dist/`.
+- `pnpm start:prod` – execute the transpiled build locally for smoke tests.
+- `pnpm lint` / `pnpm format` – autofix lint issues and apply Prettier formatting before committing.
 
 ## Coding Style & Naming Conventions
-
-TypeScript files follow Prettier defaults: two-space indentation, trailing semicolons, and double quotes only when required. Match Nest patterns by suffixing classes with `Module`, `Controller`, or `Service`, and keep variables in `camelCase` with constants in `SCREAMING_SNAKE_CASE`. Rely on dependency injection through constructor parameters and annotate public APIs with explicit types.
+- TypeScript sources use Prettier defaults: two-space indentation, double quotes only when required, and semicolons enabled.
+- Follow NestJS naming: modules end with `Module`, controllers with `Controller`, providers/services with `Service`. Use `PascalCase` for classes and decorators, `camelCase` for variables and functions, and `SCREAMING_SNAKE_CASE` for constants.
+- Keep public APIs strongly typed and favor dependency injection via constructor parameters to align with Nest patterns.
 
 ## Testing Guidelines
-
-Jest powers the suite. Place unit specs beside their implementations with the `.spec.ts` suffix, and run `pnpm test` or `pnpm test:watch` while iterating. Use `pnpm test:e2e` to execute the specs in `test/`, ensuring they seed and clean data so the pipeline stays deterministic. Target stable coverage by running `pnpm test:cov` ahead of pull requests.
+- Unit specs live alongside implementation in `src/` with the `.spec.ts` suffix; Jest auto-discovers them using `testRegex`.
+- Run `pnpm test` for the full suite, `pnpm test:watch` while iterating, and `pnpm test:cov` before PRs to confirm coverage remains stable.
+- End-to-end tests reside in `test/` and run via `pnpm test:e2e`; ensure they seed and clean their own data to stay repeatable.
 
 ## Commit & Pull Request Guidelines
-
-Write imperative, present-tense commits (e.g., `Add booking module`) and group related changes together. Before opening a PR, confirm lint, unit, and e2e tests pass, then summarize changes, reference related issues, and attach request/response samples or screenshots for API updates. Highlight migration or configuration steps so reviewers can reproduce your environment without guesswork.
-
-## Security & Configuration Tips
-
-Never commit secrets or local `.env` files; prefer environment variables or secret stores. Update `nest-cli.json`, `tsconfig*.json`, and `eslint.config.mjs` in tandem when adding path aliases or new tooling. Use feature flags for risky releases, and audit Prisma migrations to ensure destructive operations are intentional.
-
-## Explanation
-
-When i ask you how something works or to explain anything, break it down further for me. Use plain and simple english so a 10 year old boy can understand.
-
-## Testing Documentation
-
-Document any test we have to do in a file in the docs directory so we keep track of it. when putting documentation together break it down further for me. Use plain and simple english so a 10 year old boy can understand. Let me understand why we need conduct such a test and how the systme will benefit from it.
+- Write imperative, present-tense commit messages (`Add booking module`, not `Added`), mirroring the existing history. Group related changes in a single commit when practical.
+- Before opening a PR, confirm lint and tests pass. Provide a concise summary, reference related issues, and include request/response samples or screenshots for API or contract changes.
+- Flag configuration or migration steps in the PR description so reviewers can validate the setup locally without guesswork.

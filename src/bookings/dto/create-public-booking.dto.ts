@@ -24,4 +24,8 @@ export class CreatePublicBookingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  seatId?: string;
 }

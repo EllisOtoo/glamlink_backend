@@ -8,60 +8,73 @@ datasource db {
 }
 
 model Vendor {
-  id              String                @id @default(cuid())
-  businessName    String
-  handle          String                @unique
-  status          VendorStatus          @default(DRAFT)
-  contactEmail    String?
-  phoneNumber     String?
-  bio             String?
-  locationArea    String?
-  instagramHandle String?
-  websiteUrl      String?
-  kycSubmittedAt  DateTime?
-  verifiedAt      DateTime?
-  rejectionReason String?
-  reviewedById    String?
-  userId          String?               @unique
-  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
-  reviewedBy      User?                 @relation("VendorReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  documents       KycDocument[]
-  statusHistory   VendorStatusHistory[]
-  services        Service[]
-  weeklyHours     WeeklyAvailability[]
+  id                    String                 @id @default(cuid())
+  businessName          String
+  handle                String                 @unique
+  status                VendorStatus           @default(DRAFT)
+  contactEmail          String?
+  phoneNumber           String?
+  bio                   String?
+  locationArea          String?
+  instagramHandle       String?
+  websiteUrl            String?
+  latitude              Float?
+  longitude             Float?
+  serviceRadiusKm       Int?                  @default(15)
+  logoStorageKey        String?
+  logoVersion           Int                    @default(0)
+  kycSubmittedAt        DateTime?
+  verifiedAt            DateTime?
+  rejectionReason       String?
+  reviewedById          String?
+  userId                String?                @unique
+  user                  User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reviewedBy            User?                  @relation("VendorReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents             KycDocument[]
+  statusHistory         VendorStatusHistory[]
+  services              Service[]
+  weeklyHours           WeeklyAvailability[]
   availabilityOverrides AvailabilityOverride[]
-  bookings        Booking[]
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  staff                 StaffMember[]
+  seats                 ServiceSeat[]
+  bookings              Booking[]
+  calendarEntries       BookingCalendarEntry[]
+  reviews               Review[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([status])
 }
 
 model User {
-  id             String     @id @default(cuid())
-  email          String     @unique
-  firebaseUid    String?    @unique
-  role           UserRole   @default(CUSTOMER)
-  lastSignedInAt DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  sessions       Session[]
-  emailOtps      EmailOtp[]
-  vendor         Vendor?
-  statusEvents   VendorStatusHistory[]  @relation("VendorStatusActor")
-  reviewedVendors Vendor[]              @relation("VendorReviewedBy")
+  id               String                 @id @default(cuid())
+  email            String                 @unique
+  firebaseUid      String?                @unique
+  role             UserRole               @default(CUSTOMER)
+  lastSignedInAt   DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  sessions         Session[]
+  emailOtps        EmailOtp[]
+  vendor           Vendor?
+  statusEvents     VendorStatusHistory[]  @relation("VendorStatusActor")
+  reviewedVendors  Vendor[]               @relation("VendorReviewedBy")
+  customerBookings Booking[]              @relation("CustomerBookings")
+  calendarEntries  BookingCalendarEntry[] @relation("CalendarCustomerEntries")
+  pushTokens       PushToken[]
+  writtenReviews   Review[]
 }
 
 model EmailOtp {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   email        String
   codeHash     String
   expiresAt    DateTime
   consumedAt   DateTime?
-  attemptCount Int      @default(0)
-  createdAt    DateTime @default(now())
+  attemptCount Int       @default(0)
+  createdAt    DateTime  @default(now())
   userId       String?
-  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([email])
   @@index([expiresAt])
@@ -98,11 +111,11 @@ model VendorStatusHistory {
 }
 
 model Session {
-  id         String   @id @default(cuid())
-  tokenHash  String   @unique
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
   expiresAt  DateTime
   revokedAt  DateTime?
   lastUsedAt DateTime?
@@ -128,21 +141,37 @@ enum VendorStatus {
 }
 
 model Service {
-  id              String   @id @default(cuid())
+  id              String                 @id @default(cuid())
   vendorId        String
-  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   name            String
   description     String?
   priceCents      Int
   durationMinutes Int
-  bufferMinutes   Int      @default(0)
+  bufferMinutes   Int                    @default(0)
   depositPercent  Int?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive        Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
   bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+  images          ServiceImage[]
+  seatLinks       ServiceSeatService[]
 
   @@index([vendorId, isActive])
+}
+
+model ServiceImage {
+  id         String   @id @default(cuid())
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  storageKey String
+  caption    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([serviceId])
 }
 
 model WeeklyAvailability {
@@ -178,48 +207,64 @@ enum AvailabilityOverrideType {
 }
 
 model Booking {
-  id                String         @id @default(cuid())
-  reference         String         @unique
-  vendorId          String
-  vendor            Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  serviceId         String
-  service           Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  customerName      String
-  customerEmail     String?
-  customerPhone     String?
-  status            BookingStatus  @default(PENDING)
-  scheduledStart    DateTime
-  scheduledEnd      DateTime
-  pricePesewas      Int
-  depositPesewas    Int
-  balancePesewas    Int
-  paymentIntent     PaymentIntent?
-  notes             String?
-  cancelledAt       DateTime?
-  completedAt       DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                 String                 @id @default(cuid())
+  reference          String                 @unique
+  vendorId           String
+  vendor             Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  serviceId          String
+  service            Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customerUserId     String?
+  customer           User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id], onDelete: SetNull)
+  customerName       String
+  customerEmail      String?
+  customerPhone      String?
+  status             BookingStatus          @default(PENDING)
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+  pricePesewas       Int
+  depositPesewas     Int
+  balancePesewas     Int
+  paymentIntent      PaymentIntent?
+  notes              String?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledBy        BookingCancelActor?
+  rescheduledAt      DateTime?
+  rescheduleCount    Int                    @default(0)
+  reminderSentAt     DateTime?
+  completedAt        DateTime?
+  seatId             String?
+  seat               ServiceSeat?           @relation(fields: [seatId], references: [id], onDelete: SetNull)
+  staffId            String?
+  staff              StaffMember?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  calendarEntries    BookingCalendarEntry[]
+  review             Review?
 
   @@index([vendorId, scheduledStart])
   @@index([vendorId, status])
   @@index([serviceId, scheduledStart])
+  @@index([customerUserId, scheduledStart])
+  @@index([seatId, scheduledStart])
+  @@index([staffId, scheduledStart])
 }
 
 model PaymentIntent {
-  id               String          @id @default(cuid())
-  bookingId        String          @unique
-  booking          Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  provider         PaymentProvider
-  providerRef      String          @unique
-  status           PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
-  amountPesewas    Int
-  currency         String          @default("GHS")
-  metadata         Json?
-  lastError        String?
-  confirmedAt      DateTime?
-  cancelledAt      DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id            String          @id @default(cuid())
+  bookingId     String          @unique
+  booking       Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  provider      PaymentProvider
+  providerRef   String          @unique
+  status        PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
+  amountPesewas Int
+  currency      String          @default("GHS")
+  metadata      Json?
+  lastError     String?
+  confirmedAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 enum BookingStatus {
@@ -242,4 +287,132 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   CANCELED
+}
+
+model BookingCalendarEntry {
+  id             String            @id @default(cuid())
+  bookingId      String
+  booking        Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  ownerType      CalendarOwnerType
+  vendorId       String?
+  vendor         Vendor?           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  customerUserId String?
+  customer       User?             @relation("CalendarCustomerEntries", fields: [customerUserId], references: [id], onDelete: SetNull)
+  serviceId      String
+  service        Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  seatId         String?
+  seat           ServiceSeat?      @relation(fields: [seatId], references: [id], onDelete: SetNull)
+  staffId        String?
+  staff          StaffMember?      @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  status         BookingStatus
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([bookingId, ownerType])
+  @@index([vendorId, scheduledStart])
+  @@index([customerUserId, scheduledStart])
+  @@index([seatId, scheduledStart])
+  @@index([staffId, scheduledStart])
+}
+
+model StaffMember {
+  id              String        @id @default(cuid())
+  vendorId        String
+  vendor          Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name            String
+  bio             String?
+  avatarStorageKey String?
+  specialties     String[]      @default([])
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  seats           ServiceSeat[]
+  bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+
+  @@index([vendorId, isActive])
+}
+
+model ServiceSeat {
+  id              String                 @id @default(cuid())
+  vendorId        String
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  label           String
+  description     String?
+  capacity        Int                    @default(1)
+  isActive        Boolean                @default(true)
+  staffId         String?
+  staff           StaffMember?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+  services        ServiceSeatService[]
+
+  @@index([vendorId, isActive])
+  @@index([staffId])
+}
+
+model ServiceSeatService {
+  serviceId String
+  seatId    String
+  service   Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  seat      ServiceSeat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, seatId])
+  @@index([seatId])
+}
+
+enum CalendarOwnerType {
+  VENDOR
+  CUSTOMER
+}
+
+model PushToken {
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token            String       @unique
+  platform         PushPlatform @default(EXPO)
+  deviceName       String?
+  appVersion       String?
+  lastRegisteredAt DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([userId])
+}
+
+enum PushPlatform {
+  IOS
+  ANDROID
+  WEB
+  EXPO
+}
+
+enum BookingCancelActor {
+  CUSTOMER
+  VENDOR
+  SYSTEM
+}
+
+model Review {
+  id             String    @id @default(cuid())
+  bookingId      String    @unique
+  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vendorId       String
+  vendor         Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  customerUserId String
+  customer       User      @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
+  rating         Int
+  comment        String?
+  reply          String?
+  repliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([vendorId])
+  @@index([customerUserId])
 }

@@ -10,6 +10,9 @@ import { VendorsModule } from './vendors/vendors.module';
 import { ServicesModule } from './services/services.module';
 import { PaymentsModule } from './payments/payments.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { BookingsModule } from './bookings/bookings.module';
     ServicesModule,
     BookingsModule,
     PaymentsModule,
+    NotificationsModule,
+    ReviewsModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [AppService],
