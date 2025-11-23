@@ -4,7 +4,6 @@ import { PrismaService } from '../prisma';
 import { StorageService } from '../storage/storage.service';
 import type { DiscoverServicesQueryDto } from './dto/discover-services.dto';
 import type { NearbyServicesQueryDto } from './dto/nearby-services.dto';
-import type { Prisma as PrismaClient } from '@prisma/client';
 
 export interface VendorSummary {
   id: string;
@@ -57,10 +56,25 @@ export interface ServiceDetailSummary extends ServiceSummary {
   seats: SeatSummary[];
 }
 
+export interface VendorDetailSummary extends VendorSummary {
+  services: ServiceSummary[];
+}
+
 type ReviewAggregate = {
   vendorId: string;
   _avg: { rating: number | null };
   _count: { rating: number };
+};
+
+type VendorSummarySource = {
+  id: string;
+  businessName: string;
+  handle: string;
+  locationArea: string | null;
+  bio: string | null;
+  logoStorageKey: string | null;
+  logoVersion: number | null;
+  services: { priceCents: number }[];
 };
 
 const SERVICE_INCLUDE = {
@@ -118,22 +132,22 @@ export class PublicCatalogService {
         { createdAt: 'desc' },
       ],
       take: limit,
-        select: {
-          id: true,
-          businessName: true,
-          handle: true,
-          locationArea: true,
-          bio: true,
-          logoStorageKey: true,
-          logoVersion: true,
-          latitude: true,
-          longitude: true,
-          serviceRadiusKm: true,
-          services: {
-            where: { isActive: true },
-            select: { priceCents: true },
-          },
+      select: {
+        id: true,
+        businessName: true,
+        handle: true,
+        locationArea: true,
+        bio: true,
+        logoStorageKey: true,
+        logoVersion: true,
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
+        services: {
+          where: { isActive: true },
+          select: { priceCents: true },
         },
+      },
     });
 
     const vendorIds = vendors.map((vendor) => vendor.id);
@@ -148,31 +162,120 @@ export class PublicCatalogService {
             _count: { rating: true },
           });
 
-    return vendors.map((vendor) => {
-      const summary = reviewAggregates.find(
-        (aggregate) => aggregate.vendorId === vendor.id,
-      );
-      const startingPriceCents = vendor.services.length
-        ? Math.min(...vendor.services.map((service) => service.priceCents))
-        : null;
+    return this.mapVendorSummaries(vendors, reviewAggregates);
+  }
 
-      return {
-        id: vendor.id,
-        businessName: vendor.businessName,
-        handle: vendor.handle,
-        locationArea: vendor.locationArea ?? null,
-        bio: vendor.bio ?? null,
-        logoUrl: vendor.logoStorageKey
-          ? this.storage.buildPublicUrl(
-              vendor.logoStorageKey,
-              vendor.logoVersion ?? null,
-            )
-          : null,
-        ratingAverage: summary?._avg.rating ?? null,
-        ratingCount: summary?._count.rating ?? 0,
-        startingPriceCents,
-      };
+  async searchVendorsByHandle(
+    handle: string,
+    limit = 5,
+  ): Promise<VendorSummary[]> {
+    const normalizedHandle = this.normalizeHandle(handle);
+
+    if (!normalizedHandle) {
+      throw new BadRequestException('Handle is required to search vendors.');
+    }
+
+    const vendors = await this.prisma.vendor.findMany({
+      where: {
+        status: VendorStatus.VERIFIED,
+        handle: {
+          contains: normalizedHandle,
+          mode: 'insensitive',
+        },
+        services: {
+          some: { isActive: true },
+        },
+      },
+      orderBy: [{ handle: 'asc' }],
+      take: limit,
+      select: {
+        id: true,
+        businessName: true,
+        handle: true,
+        locationArea: true,
+        bio: true,
+        logoStorageKey: true,
+        logoVersion: true,
+        services: {
+          where: { isActive: true },
+          select: { priceCents: true },
+        },
+      },
     });
+
+    const vendorIds = vendors.map((vendor) => vendor.id);
+
+    const reviewAggregates =
+      vendorIds.length === 0
+        ? []
+        : await this.prisma.review.groupBy({
+            by: ['vendorId'],
+            where: { vendorId: { in: vendorIds } },
+            _avg: { rating: true },
+            _count: { rating: true },
+          });
+
+    return this.mapVendorSummaries(vendors, reviewAggregates);
+  }
+
+  async getVendorByHandle(handle: string): Promise<VendorDetailSummary> {
+    const normalizedHandle = this.normalizeHandle(handle);
+
+    if (!normalizedHandle) {
+      throw new NotFoundException('Vendor not found.');
+    }
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { handle: normalizedHandle },
+      select: {
+        id: true,
+        businessName: true,
+        handle: true,
+        locationArea: true,
+        bio: true,
+        status: true,
+        logoStorageKey: true,
+        logoVersion: true,
+        services: {
+          where: { isActive: true },
+          select: { priceCents: true },
+        },
+      },
+    });
+
+    if (!vendor || vendor.status !== VendorStatus.VERIFIED) {
+      throw new NotFoundException('Vendor not found.');
+    }
+
+    const reviewAggregate = await this.prisma.review.aggregate({
+      where: { vendorId: vendor.id },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    const services = await this.prisma.service.findMany({
+      where: { vendorId: vendor.id, isActive: true },
+      orderBy: [{ createdAt: 'desc' }],
+      include: SERVICE_INCLUDE,
+    });
+
+    const reviewSummaries: ReviewAggregate[] = [
+      {
+        vendorId: vendor.id,
+        _avg: { rating: reviewAggregate._avg.rating ?? null },
+        _count: { rating: reviewAggregate._count.rating ?? 0 },
+      },
+    ];
+
+    const vendorSummary = this.mapVendorSummary(vendor, reviewSummaries);
+    const serviceSummaries = services.map((service) =>
+      this.mapServiceSummary(service, reviewSummaries),
+    );
+
+    return {
+      ...vendorSummary,
+      services: serviceSummaries,
+    };
   }
 
   async discoverServices(
@@ -314,12 +417,7 @@ export class PublicCatalogService {
     reviewAggregates: ReviewAggregate[],
   ): ServiceSummary {
     const vendor = service.vendor!;
-    const vendorReviewSummary = reviewAggregates.find(
-      (aggregate) => aggregate.vendorId === vendor.id,
-    );
-    const startingPriceCents = vendor.services.length
-      ? Math.min(...vendor.services.map((entry) => entry.priceCents))
-      : null;
+    const vendorSummary = this.mapVendorSummary(vendor, reviewAggregates);
 
     return {
       id: service.id,
@@ -328,22 +426,7 @@ export class PublicCatalogService {
       priceCents: service.priceCents,
       durationMinutes: service.durationMinutes,
       createdAt: service.createdAt,
-      vendor: {
-        id: vendor.id,
-        businessName: vendor.businessName,
-        handle: vendor.handle,
-        locationArea: vendor.locationArea ?? null,
-        bio: vendor.bio ?? null,
-        logoUrl: vendor.logoStorageKey
-          ? this.storage.buildPublicUrl(
-              vendor.logoStorageKey,
-              vendor.logoVersion ?? null,
-            )
-          : null,
-        ratingAverage: vendorReviewSummary?._avg.rating ?? null,
-        ratingCount: vendorReviewSummary?._count.rating ?? 0,
-        startingPriceCents,
-      },
+      vendor: vendorSummary,
       images: service.images.map((image) => ({
         id: image.id,
         caption: image.caption ?? null,
@@ -452,5 +535,47 @@ export class PublicCatalogService {
       ...summary,
       seats,
     };
+  }
+
+  private mapVendorSummaries(
+    vendors: VendorSummarySource[],
+    reviewAggregates: ReviewAggregate[],
+  ): VendorSummary[] {
+    return vendors.map((vendor) =>
+      this.mapVendorSummary(vendor, reviewAggregates),
+    );
+  }
+
+  private mapVendorSummary(
+    vendor: VendorSummarySource,
+    reviewAggregates: ReviewAggregate[],
+  ): VendorSummary {
+    const summary = reviewAggregates.find(
+      (aggregate) => aggregate.vendorId === vendor.id,
+    );
+    const startingPriceCents = vendor.services.length
+      ? Math.min(...vendor.services.map((service) => service.priceCents))
+      : null;
+
+    return {
+      id: vendor.id,
+      businessName: vendor.businessName,
+      handle: vendor.handle,
+      locationArea: vendor.locationArea ?? null,
+      bio: vendor.bio ?? null,
+      logoUrl: vendor.logoStorageKey
+        ? this.storage.buildPublicUrl(
+            vendor.logoStorageKey,
+            vendor.logoVersion ?? null,
+          )
+        : null,
+      ratingAverage: summary?._avg.rating ?? null,
+      ratingCount: summary?._count.rating ?? 0,
+      startingPriceCents,
+    };
+  }
+
+  private normalizeHandle(handle: string): string {
+    return handle.trim().replace(/^@+/, '').toLowerCase();
   }
 }
