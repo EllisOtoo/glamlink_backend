@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { VendorStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { StorageService } from '../storage/storage.service';
@@ -127,10 +131,7 @@ export class PublicCatalogService {
           some: { isActive: true },
         },
       },
-      orderBy: [
-        { verifiedAt: 'desc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ verifiedAt: 'desc' }, { createdAt: 'desc' }],
       take: limit,
       select: {
         id: true,
@@ -367,7 +368,9 @@ export class PublicCatalogService {
 
     const withDistance = services
       .filter(
-        (service): service is ServiceWithRelations & {
+        (
+          service,
+        ): service is ServiceWithRelations & {
           vendor: ServiceWithRelations['vendor'] & {
             latitude: number;
             longitude: number;
@@ -446,10 +449,7 @@ export class PublicCatalogService {
       where: {
         vendorId,
         isActive: true,
-        OR: [
-          { services: { some: { serviceId } } },
-          { services: { none: {} } },
-        ],
+        OR: [{ services: { some: { serviceId } } }, { services: { none: {} } }],
       },
       include: {
         staff: {
@@ -526,10 +526,7 @@ export class PublicCatalogService {
       },
     ]);
 
-    const seats = await this.listSeatsForService(
-      service.vendor.id,
-      service.id,
-    );
+    const seats = await this.listSeatsForService(service.vendor.id, service.id);
 
     return {
       ...summary,
