@@ -1,1 +1,2 @@
 export const MAX_VENDOR_LOGO_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+export const MAX_KYC_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB

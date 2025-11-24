@@ -20,10 +20,12 @@ import {
 } from '../storage/media.helpers';
 import { MAX_VENDOR_LOGO_SIZE_BYTES } from './vendors.constants';
 import type { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
+import { RequestKycUploadUrlDto } from './dto/request-kyc-upload-url.dto';
 import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
 import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
 import { CreateSeatDto } from './dto/create-seat.dto';
 import { UpdateSeatDto } from './dto/update-seat.dto';
+import { MAX_KYC_DOCUMENT_SIZE_BYTES } from './vendors.constants';
 
 export interface VendorProfileResult extends Vendor {
   documents: KycDocument[];
@@ -266,6 +268,64 @@ export class VendorsService {
         type: payload.type,
         fileName: payload.fileName,
         storageKey: payload.storageKey,
+        mimeType: payload.mimeType,
+        sizeBytes: payload.sizeBytes,
+      },
+    });
+  }
+
+  async requestKycUploadUrl(
+    userId: string,
+    params: RequestKycUploadUrlDto,
+  ) {
+    const vendor = await this.requireVendor(userId);
+    const { extension, normalizedMime } = this.assertKycConstraints(
+      params.mimeType,
+      params.sizeBytes,
+    );
+    const storageKey = `vendors/${vendor.id}/kyc/${randomUUID()}.${extension}`;
+    return this.storage.createPresignedUpload({
+      key: storageKey,
+      contentType: normalizedMime,
+      metadata: {
+        vendorId: vendor.id,
+        purpose: 'kyc',
+        type: params.type ?? '',
+      },
+    });
+  }
+
+  async confirmKycUpload(
+    userId: string,
+    payload: {
+      type: string;
+      fileName: string;
+      storageKey: string;
+      mimeType?: string;
+      sizeBytes?: number;
+    },
+  ): Promise<KycDocument> {
+    const vendor = await this.requireVendor(userId);
+    const normalizedKey = payload.storageKey.trim();
+    const expectedPrefix = `vendors/${vendor.id}/kyc/`;
+    if (!normalizedKey.startsWith(expectedPrefix)) {
+      throw new BadRequestException(
+        'KYC storage key does not belong to this vendor.',
+      );
+    }
+    const { extension } = this.assertKycConstraints(
+      payload.mimeType,
+      payload.sizeBytes,
+    );
+    if (!payload.fileName.toLowerCase().includes('.')) {
+      payload.fileName = `${payload.fileName}.${extension}`;
+    }
+    return this.prisma.kycDocument.create({
+      data: {
+        vendorId: vendor.id,
+        type: payload.type,
+        fileName: payload.fileName,
+        storageKey: normalizedKey,
         mimeType: payload.mimeType,
         sizeBytes: payload.sizeBytes,
       },
@@ -693,6 +753,48 @@ export class VendorsService {
     if (!resolveImageExtension(normalizedMime)) {
       throw new BadRequestException('Unsupported logo image type.');
     }
+  }
+
+  private assertKycConstraints(
+    mimeType?: string,
+    sizeBytes?: number,
+  ): { extension: string; normalizedMime: string } {
+    const normalizedMime = normalizeMimeType(mimeType);
+    if (!normalizedMime) {
+      throw new BadRequestException('KYC document mime type is required.');
+    }
+
+    if (
+      typeof sizeBytes !== 'number' ||
+      Number.isNaN(sizeBytes) ||
+      sizeBytes <= 0
+    ) {
+      throw new BadRequestException('KYC document file size is required.');
+    }
+
+    if (sizeBytes > MAX_KYC_DOCUMENT_SIZE_BYTES) {
+      throw new BadRequestException(
+        'KYC document exceeds the maximum size of 10MB.',
+      );
+    }
+
+    const extension = this.resolveKycExtension(normalizedMime);
+    if (!extension) {
+      throw new BadRequestException('Unsupported KYC document type.');
+    }
+
+    return { extension, normalizedMime };
+  }
+
+  private resolveKycExtension(mimeType: string): string | null {
+    const normalized = normalizeMimeType(mimeType);
+    if (resolveImageExtension(normalized)) {
+      return resolveImageExtension(normalized);
+    }
+    if (normalized === 'application/pdf') {
+      return 'pdf';
+    }
+    return null;
   }
 
   private defaultProfileInclude() {

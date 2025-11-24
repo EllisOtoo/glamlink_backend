@@ -26,6 +26,7 @@ import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
 import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
 import { CreateSeatDto } from './dto/create-seat.dto';
 import { UpdateSeatDto } from './dto/update-seat.dto';
+import { RequestKycUploadUrlDto } from './dto/request-kyc-upload-url.dto';
 
 @Controller()
 export class VendorsController {
@@ -93,7 +94,17 @@ export class VendorsController {
     @CurrentUser() user: User,
     @Body() dto: CreateKycDocumentDto,
   ) {
-    return this.vendorsService.addKycDocument(user.id, dto);
+    return this.vendorsService.confirmKycUpload(user.id, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/documents/upload-url')
+  requestKycUpload(
+    @CurrentUser() user: User,
+    @Body() dto: RequestKycUploadUrlDto,
+  ) {
+    return this.vendorsService.requestKycUploadUrl(user.id, dto);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
