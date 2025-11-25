@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma, Session, User, UserRole } from '@prisma/client';
@@ -10,12 +12,14 @@ import { randomBytes, randomInt, createHash } from 'node:crypto';
 import { PrismaService } from '../prisma';
 import { OtpMailerService } from './otp-mailer.service';
 import { FirebaseAdminService } from '../firebase';
+import { signJwt, verifyJwt } from './jwt.utils';
 
 const OTP_CODE_LENGTH = 6;
 const OTP_TTL_SECONDS = 5 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+const DEFAULT_JWT_TTL_SECONDS = 60 * 60; // 1 hour
 
 export interface AuthSession {
   token: string;
@@ -192,6 +196,28 @@ export class AuthService {
     };
   }
 
+  async validateJwtToken(token: string): Promise<{ user: User } | null> {
+    const secret = this.getJwtSecret();
+    try {
+      const payload = verifyJwt(token, secret);
+      const userId = String(payload.sub);
+      const firebaseUid =
+        typeof payload.firebaseUid === 'string' ? payload.firebaseUid : null;
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!user) {
+        return null;
+      }
+      if (firebaseUid && user.firebaseUid && user.firebaseUid !== firebaseUid) {
+        return null;
+      }
+      return { user };
+    } catch (error) {
+      return null;
+    }
+  }
+
   async revokeSession(sessionId: string): Promise<void> {
     await this.prisma.session.update({
       where: { id: sessionId },
@@ -267,6 +293,70 @@ export class AuthService {
     });
   }
 
+  async registerWithFirebaseIdToken(params: {
+    idToken: string;
+    requestedRole?: UserRole;
+    metadata?: { userAgent?: string; clientIp?: string };
+  }): Promise<{
+    access_token: string;
+    expiresAt: Date;
+    user: User;
+  }> {
+    const decoded = await this.verifyFirebaseIdToken(params.idToken);
+    const normalizedEmail = this.normalizeEmail(decoded.email ?? '');
+    const requestedRole = params.requestedRole ?? UserRole.CUSTOMER;
+
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ firebaseUid: decoded.uid }, { email: normalizedEmail }],
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException('User already registered.');
+    }
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        role: requestedRole,
+        firebaseUid: decoded.uid,
+        lastSignedInAt: new Date(),
+      },
+    });
+
+    const jwt = this.buildJwt(user, decoded);
+    this.logger.log(`Registered Firebase user ${user.id} (${user.email})`);
+    return jwt;
+  }
+
+  async loginWithFirebaseJwt(params: {
+    idToken: string;
+    requestedRole?: UserRole;
+    metadata?: { userAgent?: string; clientIp?: string };
+  }): Promise<{
+    access_token: string;
+    expiresAt: Date;
+    user: User;
+  }> {
+    const decoded = await this.verifyFirebaseIdToken(params.idToken);
+
+    const user = await this.prisma.user.findFirst({
+      where: { firebaseUid: decoded.uid },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastSignedInAt: new Date() },
+    });
+
+    return this.buildJwt(user, decoded);
+  }
+
   private normalizeEmail(email: string): string {
     if (!email) {
       throw new BadRequestException('Email is required.');
@@ -280,6 +370,77 @@ export class AuthService {
     }
 
     return trimmed;
+  }
+
+  private async verifyFirebaseIdToken(
+    idToken: string,
+  ): Promise<DecodedIdToken> {
+    const sanitizedToken = idToken?.trim();
+
+    if (!sanitizedToken) {
+      throw new BadRequestException('Firebase ID token is required.');
+    }
+
+    let decodedToken: DecodedIdToken;
+
+    try {
+      decodedToken = await this.firebaseAdmin.verifyIdToken(sanitizedToken);
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : 'Unknown verification error';
+      this.logger.warn(`Failed to verify Firebase ID token: ${reason}`);
+      throw new UnauthorizedException('Invalid Firebase ID token.');
+    }
+
+    if (!decodedToken.email) {
+      throw new UnauthorizedException(
+        'Firebase account is missing a verified email address.',
+      );
+    }
+
+    return decodedToken;
+  }
+
+  private buildJwt(
+    user: User,
+    decodedToken: DecodedIdToken,
+  ): { access_token: string; expiresAt: Date; user: User } {
+    const ttl = this.getJwtTtlSeconds();
+    const exp = Math.floor(Date.now() / 1000) + ttl;
+    const payload = {
+      sub: user.id,
+      firebaseUid: decodedToken.uid,
+      email: user.email,
+      phoneNumber: decodedToken.phone_number ?? null,
+      role: user.role,
+      exp,
+    };
+
+    const token = signJwt(payload, this.getJwtSecret());
+    return {
+      access_token: token,
+      expiresAt: new Date(exp * 1000),
+      user,
+    };
+  }
+
+  private getJwtSecret(): string {
+    const secret = process.env.AUTH_JWT_SECRET;
+    if (!secret) {
+      this.logger.warn(
+        'AUTH_JWT_SECRET not set. Falling back to insecure default. Set a strong secret in production.',
+      );
+      return 'change-me-in-production';
+    }
+    return secret;
+  }
+
+  private getJwtTtlSeconds(): number {
+    const parsed = Number(process.env.AUTH_JWT_TTL_SECONDS);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return DEFAULT_JWT_TTL_SECONDS;
+    }
+    return parsed;
   }
 
   private sanitizeOtpCode(code: string): string {

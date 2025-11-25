@@ -16,6 +16,7 @@ import type { RequestWithAuth } from './decorators/current-user.decorator';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { FirebaseLoginDto } from './dto/firebase-login.dto';
+import { FirebaseRegisterDto } from './dto/firebase-register.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -99,11 +100,43 @@ export class AuthController {
     };
   }
 
+  @Post('register')
+  async firebaseRegisterJwt(
+    @Body() body: FirebaseRegisterDto,
+    @Req() request: Request,
+  ) {
+    return this.authService.registerWithFirebaseIdToken({
+      idToken: body.idToken,
+      requestedRole: body.role,
+      metadata: {
+        userAgent: request.headers['user-agent'],
+        clientIp: this.extractClientIp(request),
+      },
+    });
+  }
+
+  @Post('login')
+  async firebaseLoginJwt(
+    @Body() body: FirebaseLoginDto,
+    @Req() request: Request,
+  ) {
+    return this.authService.loginWithFirebaseJwt({
+      idToken: body.idToken,
+      requestedRole: body.role,
+      metadata: {
+        userAgent: request.headers['user-agent'],
+        clientIp: this.extractClientIp(request),
+      },
+    });
+  }
+
   @Post('logout')
   @UseGuards(SessionAuthGuard)
   @HttpCode(204)
   async logout(@Req() request: RequestWithAuth): Promise<void> {
-    await this.authService.revokeSession(request.auth.session.id);
+    if (request.auth.session?.id) {
+      await this.authService.revokeSession(request.auth.session.id);
+    }
   }
 
   @Get('me')

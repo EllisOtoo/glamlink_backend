@@ -22,6 +22,17 @@ export class SessionAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing session token.');
     }
 
+    // Prefer JWT; fall back to legacy session token.
+    const jwtResult = await this.authService.validateJwtToken(token);
+    if (jwtResult) {
+      (request as RequestWithAuth).auth = {
+        token,
+        session: undefined,
+        user: jwtResult.user,
+      };
+      return true;
+    }
+
     const { session, user } =
       await this.authService.validateSessionToken(token);
 

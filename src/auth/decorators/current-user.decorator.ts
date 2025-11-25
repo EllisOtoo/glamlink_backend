@@ -5,7 +5,7 @@ import { Session, User } from '@prisma/client';
 export interface RequestWithAuth extends Request {
   auth: {
     token: string;
-    session: Session;
+    session?: Session;
     user: User;
   };
 }
