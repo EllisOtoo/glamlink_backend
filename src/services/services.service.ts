@@ -4,6 +4,7 @@ import {
   AvailabilityOverride,
   WeeklyAvailability,
   ServiceImage,
+  BookingStatus,
 } from '@prisma/client';
 import {
   BadRequestException,
@@ -38,6 +39,12 @@ interface TimeWindow {
   start: Date;
   end: Date;
 }
+
+const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
+  BookingStatus.PENDING,
+  BookingStatus.AWAITING_PAYMENT,
+  BookingStatus.CONFIRMED,
+];
 
 @Injectable()
 export class ServicesService {
@@ -458,6 +465,152 @@ export class ServicesService {
       startAt: slot.start.toISOString(),
       endAt: slot.end.toISOString(),
     }));
+  }
+
+  async listAvailabilitySlotsByService(
+    serviceId: string,
+    params: { startDate?: string; days?: number },
+  ): Promise<
+    {
+      startAt: string;
+      endAt: string;
+      availableSeats: number;
+      seats: {
+        seatId: string;
+        label: string;
+        capacity: number;
+        bookedCount: number;
+        available: boolean;
+      }[];
+    }[]
+  > {
+    const service = await this.prisma.service.findFirst({
+      where: { id: serviceId, isActive: true },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found or inactive.');
+    }
+
+    const startDate = params.startDate ? new Date(params.startDate) : new Date();
+    if (Number.isNaN(startDate.getTime())) {
+      throw new BadRequestException('Invalid start date.');
+    }
+
+    const days = params.days ?? 30;
+    const rangeStart = this.startOfDayUtc(startDate);
+    const rangeEnd = this.addDays(rangeStart, days);
+
+    const [weeklyWindows, overrides] = await this.prisma.$transaction([
+      this.prisma.weeklyAvailability.findMany({
+        where: { vendorId: service.vendorId },
+      }),
+      this.prisma.availabilityOverride.findMany({
+        where: {
+          vendorId: service.vendorId,
+          startsAt: { lt: rangeEnd },
+          endsAt: { gt: rangeStart },
+        },
+      }),
+    ]);
+
+    if (weeklyWindows.length === 0) {
+      return [];
+    }
+
+    const slots = this.generateSlots({
+      service,
+      rangeStart,
+      rangeEnd,
+      weeklyWindows,
+      overrides,
+    });
+
+    const seats = await this.prisma.serviceSeat.findMany({
+      where: {
+        vendorId: service.vendorId,
+        isActive: true,
+        OR: [
+          { services: { some: { serviceId: service.id } } },
+          { services: { none: {} } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const overlappingBookings = await this.prisma.booking.findMany({
+      where: {
+        vendorId: service.vendorId,
+        serviceId: service.id,
+        status: { in: ACTIVE_BOOKING_STATUSES },
+        scheduledStart: { lt: rangeEnd },
+        scheduledEnd: { gt: rangeStart },
+      },
+      select: {
+        seatId: true,
+        scheduledStart: true,
+        scheduledEnd: true,
+      },
+    });
+
+    const capacityForSeat = (seatId: string | null) => {
+      if (!seatId) {
+        return 1;
+      }
+      const seat = seats.find((candidate) => candidate.id === seatId);
+      if (!seat) {
+        return 1;
+      }
+      return seat.capacity && seat.capacity > 0 ? seat.capacity : 1;
+    };
+
+    const bookedCountForSeatAndSlot = (
+      seatId: string | null,
+      slot: TimeWindow,
+    ) =>
+      overlappingBookings.filter(
+        (booking) =>
+          booking.seatId === seatId &&
+          booking.scheduledStart < slot.end &&
+          booking.scheduledEnd > slot.start,
+      ).length;
+
+    return slots.map((slot) => {
+      if (seats.length === 0) {
+        const legacyBooked = bookedCountForSeatAndSlot(null, slot);
+        const capacity = capacityForSeat(null);
+        return {
+          startAt: slot.start.toISOString(),
+          endAt: slot.end.toISOString(),
+          availableSeats: legacyBooked < capacity ? 1 : 0,
+          seats: [],
+        };
+      }
+
+      const seatAvailabilities = seats.map((seat) => {
+        const bookedCount = bookedCountForSeatAndSlot(seat.id, slot);
+        const capacity = capacityForSeat(seat.id);
+        const available = bookedCount < capacity;
+        return {
+          seatId: seat.id,
+          label: seat.label,
+          capacity,
+          bookedCount,
+          available,
+        };
+      });
+
+      const availableSeats = seatAvailabilities.filter(
+        (seat) => seat.available,
+      ).length;
+
+      return {
+        startAt: slot.start.toISOString(),
+        endAt: slot.end.toISOString(),
+        availableSeats,
+        seats: seatAvailabilities,
+      };
+    });
   }
 
   private async requireVendor(userId: string): Promise<VendorContext> {

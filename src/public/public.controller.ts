@@ -2,8 +2,17 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { HighlightVendorsQueryDto } from './dto/highlight-vendors.dto';
 import { DiscoverServicesQueryDto } from './dto/discover-services.dto';
 import { SearchVendorsQueryDto } from './dto/search-vendors.dto';
-import { PublicCatalogService, ServiceSummary, VendorSummary, NearbyServiceSummary, ServiceDetailSummary, VendorDetailSummary } from './public.service';
+import {
+  PublicCatalogService,
+  ServiceSummary,
+  VendorSummary,
+  NearbyServiceSummary,
+  ServiceDetailSummary,
+  VendorDetailSummary,
+  ServiceAvailabilitySlot,
+} from './public.service';
 import { NearbyServicesQueryDto } from './dto/nearby-services.dto';
+import { ServiceAvailabilityQueryDto } from './dto/service-availability.dto';
 
 @Controller('public/catalog')
 export class PublicCatalogController {
@@ -49,5 +58,13 @@ export class PublicCatalogController {
     @Param('serviceId') serviceId: string,
   ): Promise<ServiceDetailSummary> {
     return this.catalog.getServiceById(serviceId);
+  }
+
+  @Get('services/:serviceId/availability')
+  availabilityByService(
+    @Param('serviceId') serviceId: string,
+    @Query() query: ServiceAvailabilityQueryDto,
+  ): Promise<ServiceAvailabilitySlot[]> {
+    return this.catalog.getServiceAvailability(serviceId, query.date);
   }
 }

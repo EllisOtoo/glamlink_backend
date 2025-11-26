@@ -6,6 +6,7 @@ import {
 import { VendorStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { StorageService } from '../storage/storage.service';
+import { ServicesService } from '../services/services.service';
 import type { DiscoverServicesQueryDto } from './dto/discover-services.dto';
 import type { NearbyServicesQueryDto } from './dto/nearby-services.dto';
 
@@ -62,6 +63,19 @@ export interface ServiceDetailSummary extends ServiceSummary {
 
 export interface VendorDetailSummary extends VendorSummary {
   services: ServiceSummary[];
+}
+
+export interface ServiceAvailabilitySlot {
+  startAt: string;
+  endAt: string;
+  availableSeats: number;
+  seats: {
+    seatId: string;
+    label: string;
+    capacity: number;
+    bookedCount: number;
+    available: boolean;
+  }[];
 }
 
 type ReviewAggregate = {
@@ -121,6 +135,7 @@ export class PublicCatalogService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly servicesService: ServicesService,
   ) {}
 
   async highlightVendors(limit = 6): Promise<VendorSummary[]> {
@@ -532,6 +547,34 @@ export class PublicCatalogService {
       ...summary,
       seats,
     };
+  }
+
+  async getServiceAvailability(
+    serviceId: string,
+    date?: string,
+  ): Promise<ServiceAvailabilitySlot[]> {
+    const service = await this.prisma.service.findFirst({
+      where: {
+        id: serviceId,
+        isActive: true,
+        vendor: { status: VendorStatus.VERIFIED },
+      },
+      select: { id: true, vendorId: true },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found or inactive.');
+    }
+
+    const startDate = date ? new Date(date) : new Date();
+    if (Number.isNaN(startDate.getTime())) {
+      throw new BadRequestException('Invalid start date.');
+    }
+
+    return this.servicesService.listAvailabilitySlotsByService(service.id, {
+      startDate: startDate.toISOString().slice(0, 10),
+      days: 1,
+    });
   }
 
   private mapVendorSummaries(
