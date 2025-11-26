@@ -18,6 +18,8 @@ export interface PaystackCheckoutPayload {
   amountPesewas: number;
   currency: string;
   email: string;
+  // Restrict Paystack UI to channels we want to present (e.g., Ghana mobile money)
+  channels?: string[];
   metadata: Record<string, unknown>;
 }
 
@@ -73,6 +75,7 @@ export class PaystackService {
       amountPesewas: booking.paymentIntent.amountPesewas,
       currency: booking.paymentIntent.currency,
       email: booking.customerEmail ?? 'no-email@glamlink.app',
+      channels: this.buildChannels(booking.paymentIntent.currency),
       metadata: {
         bookingId: booking.id,
         vendorId: booking.vendorId,
@@ -81,6 +84,16 @@ export class PaystackService {
         customerPhone: booking.customerPhone,
       },
     };
+  }
+
+  private buildChannels(currency: string): string[] | undefined {
+    const normalized = currency.toUpperCase();
+    if (normalized === 'GHS') {
+      // Ensure Ghana mobile money options (MTN, AirtelTigo, Vodafone) appear in the Paystack checkout
+      return ['mobile_money', 'card'];
+    }
+
+    return undefined;
   }
 
   verifySignature(
