@@ -419,6 +419,14 @@ export class ServicesService {
     {
       startAt: string;
       endAt: string;
+      availableSeats: number;
+      seats: {
+        seatId: string;
+        label: string;
+        capacity: number;
+        bookedCount: number;
+        available: boolean;
+      }[];
     }[]
   > {
     const vendor = await this.requireVendor(userId);
@@ -455,16 +463,15 @@ export class ServicesService {
       return [];
     }
 
-    return this.generateSlots({
+    const slots = this.generateSlots({
       service,
       rangeStart,
       rangeEnd,
       weeklyWindows,
       overrides,
-    }).map((slot) => ({
-      startAt: slot.start.toISOString(),
-      endAt: slot.end.toISOString(),
-    }));
+    });
+
+    return this.buildSlotAvailability(service, slots, rangeStart, rangeEnd);
   }
 
   async listAvailabilitySlotsByService(
@@ -525,6 +532,32 @@ export class ServicesService {
       weeklyWindows,
       overrides,
     });
+
+    return this.buildSlotAvailability(service, slots, rangeStart, rangeEnd);
+  }
+
+  private async buildSlotAvailability(
+    service: Service,
+    slots: TimeWindow[],
+    rangeStart: Date,
+    rangeEnd: Date,
+  ): Promise<
+    {
+      startAt: string;
+      endAt: string;
+      availableSeats: number;
+      seats: {
+        seatId: string;
+        label: string;
+        capacity: number;
+        bookedCount: number;
+        available: boolean;
+      }[];
+    }[]
+  > {
+    if (slots.length === 0) {
+      return [];
+    }
 
     const seats = await this.prisma.serviceSeat.findMany({
       where: {
