@@ -36,7 +36,9 @@ export class CalendarService {
     }
   }
 
-  async syncEntriesForBookings(bookings: CalendarBookingShape[]): Promise<void> {
+  async syncEntriesForBookings(
+    bookings: CalendarBookingShape[],
+  ): Promise<void> {
     for (const booking of bookings) {
       await this.syncEntriesForBooking(booking);
     }

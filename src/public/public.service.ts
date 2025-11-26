@@ -398,12 +398,12 @@ export class PublicCatalogService {
           ),
       )
       .map((service) => {
-        const vendor = service.vendor!;
+        const vendor = service.vendor;
         const distanceKm = this.calculateDistanceKm(
           latitude,
           longitude,
-          vendor.latitude!,
-          vendor.longitude!,
+          vendor.latitude,
+          vendor.longitude,
         );
         return { service, distanceKm };
       })
@@ -434,7 +434,7 @@ export class PublicCatalogService {
     service: ServiceWithRelations,
     reviewAggregates: ReviewAggregate[],
   ): ServiceSummary {
-    const vendor = service.vendor!;
+    const vendor = service.vendor;
     const vendorSummary = this.mapVendorSummary(vendor, reviewAggregates);
 
     return {

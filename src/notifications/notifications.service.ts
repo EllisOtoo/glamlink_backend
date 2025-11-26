@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
-import { BookingDomainEvent, BookingEventType } from '../events/booking-events.service';
+import {
+  BookingDomainEvent,
+  BookingEventType,
+} from '../events/booking-events.service';
 import type { PushPlatform } from '@prisma/client';
 
 interface PushMessage {
@@ -73,7 +76,9 @@ export class NotificationsService {
     });
 
     if (!booking) {
-      this.logger.warn(`Booking ${event.bookingId} not found for notification.`);
+      this.logger.warn(
+        `Booking ${event.bookingId} not found for notification.`,
+      );
       return;
     }
 
@@ -84,7 +89,9 @@ export class NotificationsService {
     }
 
     if (booking.customerUserId) {
-      const customerTokens = await this.getTokensForUser(booking.customerUserId);
+      const customerTokens = await this.getTokensForUser(
+        booking.customerUserId,
+      );
       customerTokens.forEach((token) => targets.add(token));
     }
 
@@ -199,7 +206,10 @@ export class NotificationsService {
         body: JSON.stringify(payloads.length === 1 ? payloads[0] : payloads),
       });
     } catch (error) {
-      this.logger.error('Failed to send Expo push notification', error as Error);
+      this.logger.error(
+        'Failed to send Expo push notification',
+        error as Error,
+      );
     }
   }
 

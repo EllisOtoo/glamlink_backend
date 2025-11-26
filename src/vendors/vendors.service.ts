@@ -274,10 +274,7 @@ export class VendorsService {
     });
   }
 
-  async requestKycUploadUrl(
-    userId: string,
-    params: RequestKycUploadUrlDto,
-  ) {
+  async requestKycUploadUrl(userId: string, params: RequestKycUploadUrlDto) {
     const vendor = await this.requireVendor(userId);
     const { extension, normalizedMime } = this.assertKycConstraints(
       params.mimeType,

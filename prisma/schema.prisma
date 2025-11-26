@@ -57,6 +57,7 @@ model User {
   sessions         Session[]
   emailOtps        EmailOtp[]
   vendor           Vendor?
+  customerProfile  CustomerProfile?
   statusEvents     VendorStatusHistory[]  @relation("VendorStatusActor")
   reviewedVendors  Vendor[]               @relation("VendorReviewedBy")
   customerBookings Booking[]              @relation("CustomerBookings")
@@ -390,6 +391,25 @@ enum PushPlatform {
   ANDROID
   WEB
   EXPO
+}
+
+model CustomerProfile {
+  userId                String  @id
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName              String?
+  phoneNumber           String?
+  dateOfBirth           DateTime?
+  preferredPronouns     String?
+  city                  String?
+  country               String?
+  profilePhotoStorageKey String?
+  profilePhotoVersion   Int     @default(0)
+  marketingOptIn        Boolean @default(false)
+  smsOptIn              Boolean @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([phoneNumber])
 }
 
 enum BookingCancelActor {

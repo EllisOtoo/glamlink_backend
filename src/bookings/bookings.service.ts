@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, User } from '@prisma/client';
+import type { CustomerProfile, Prisma, User } from '@prisma/client';
 import {
   Booking,
   BookingCancelActor,
@@ -23,6 +23,7 @@ import { ServicesService } from '../services/services.service';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
 import { BookingEventsService } from '../events/booking-events.service';
 import { CalendarService } from '../calendar/calendar.service';
+import { CustomerProfilesService } from '../customer-profiles/customer-profiles.service';
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 
@@ -34,6 +35,18 @@ const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
 
 const MIN_MODIFICATION_NOTICE_HOURS = 24;
 
+type BookingWithCustomerProfile = Booking & {
+  service: {
+    id: string;
+    name: string;
+    durationMinutes: number;
+  };
+  customer: {
+    email: string;
+    customerProfile: CustomerProfile | null;
+  } | null;
+};
+
 @Injectable()
 export class BookingsService {
   constructor(
@@ -41,6 +54,7 @@ export class BookingsService {
     private readonly servicesService: ServicesService,
     private readonly bookingEvents: BookingEventsService,
     private readonly calendarService: CalendarService,
+    private readonly customerProfiles: CustomerProfilesService,
   ) {}
 
   async createPublicBooking(
@@ -79,6 +93,15 @@ export class BookingsService {
       throw new BadRequestException('Customer name is required.');
     }
 
+    const customerContext = await this.resolveCustomerContext(customerUserId);
+    const customerEmail =
+      this.normalizeNullable(dto.customerEmail)?.toLowerCase() ??
+      customerContext?.email ??
+      null;
+    const customerPhone =
+      this.normalizeNullable(dto.customerPhone) ??
+      this.normalizeNullable(customerContext?.profile?.phoneNumber ?? null);
+
     const reference = `book_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
 
     const booking = await this.prisma.$transaction(async (tx) => {
@@ -102,10 +125,12 @@ export class BookingsService {
           serviceId: service.id,
           customerUserId: customerUserId ?? null,
           customerName: trimmedName,
-          customerEmail: dto.customerEmail?.trim().toLowerCase() ?? null,
-          customerPhone: dto.customerPhone?.trim() ?? null,
+          customerEmail,
+          customerPhone,
           status:
-            deposit > 0 ? BookingStatus.AWAITING_PAYMENT : BookingStatus.CONFIRMED,
+            deposit > 0
+              ? BookingStatus.AWAITING_PAYMENT
+              : BookingStatus.CONFIRMED,
           scheduledStart: start,
           scheduledEnd,
           pricePesewas: price,
@@ -130,7 +155,7 @@ export class BookingsService {
               bookingId: created.id,
               vendorId: vendor.id,
               serviceId: service.id,
-              customerEmail: dto.customerEmail?.trim().toLowerCase() ?? null,
+              customerEmail,
             } as Prisma.InputJsonValue,
           },
         });
@@ -145,7 +170,9 @@ export class BookingsService {
     });
 
     if (!persisted) {
-      throw new NotFoundException('Booking could not be retrieved after creation.');
+      throw new NotFoundException(
+        'Booking could not be retrieved after creation.',
+      );
     }
 
     await this.calendarService.syncEntriesForBooking(persisted);
@@ -172,7 +199,7 @@ export class BookingsService {
     const limit = Math.min(Math.max(take, 1), 50);
     const now = new Date();
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       where: {
         vendorId: vendor.id,
         status: { in: ACTIVE_BOOKING_STATUSES },
@@ -186,10 +213,18 @@ export class BookingsService {
             durationMinutes: true,
           },
         },
+        customer: {
+          select: {
+            email: true,
+            customerProfile: true,
+          },
+        },
       },
       orderBy: { scheduledStart: 'asc' },
       take: limit,
     });
+
+    return bookings.map((booking) => this.withPublicCustomerProfile(booking));
   }
 
   async listCustomerUpcomingBookings(userId: string, take = 10) {
@@ -316,9 +351,7 @@ export class BookingsService {
       booking.status !== BookingStatus.CONFIRMED &&
       booking.status !== BookingStatus.AWAITING_PAYMENT
     ) {
-      throw new BadRequestException(
-        'Only active bookings can be rescheduled.',
-      );
+      throw new BadRequestException('Only active bookings can be rescheduled.');
     }
 
     const newStart = new Date(dto.startAt);
@@ -327,7 +360,11 @@ export class BookingsService {
     }
 
     const newStartIso = newStart.toISOString();
-    await this.ensureSlotIsAvailable(booking.vendor, booking.service, newStartIso);
+    await this.ensureSlotIsAvailable(
+      booking.vendor,
+      booking.service,
+      newStartIso,
+    );
     const newEnd = new Date(
       newStart.getTime() + booking.service.durationMinutes * 60 * 1000,
     );
@@ -447,10 +484,7 @@ export class BookingsService {
       where: {
         vendorId,
         isActive: true,
-        OR: [
-          { services: { some: { serviceId } } },
-          { services: { none: {} } },
-        ],
+        OR: [{ services: { some: { serviceId } } }, { services: { none: {} } }],
       },
       include: {
         staff: true,
@@ -473,9 +507,7 @@ export class BookingsService {
     });
 
     if (legacyOverlap) {
-      throw new BadRequestException(
-        'This time slot is no longer available.',
-      );
+      throw new BadRequestException('This time slot is no longer available.');
     }
 
     const seatIds = seats.map((seat) => seat.id);
@@ -492,7 +524,7 @@ export class BookingsService {
         })
       : [];
 
-    const seatAvailable = (seat: typeof seats[number]) => {
+    const seatAvailable = (seat: (typeof seats)[number]) => {
       const capacity = seat.capacity && seat.capacity > 0 ? seat.capacity : 1;
       const active = overlappingCounts.find(
         (entry) => entry.seatId === seat.id,
@@ -542,11 +574,14 @@ export class BookingsService {
     service: Service,
     startIso: string,
   ) {
-    const slots = await this.servicesService.listAvailabilitySlots(vendor.userId!, {
-      serviceId: service.id,
-      startDate: startIso,
-      days: 1,
-    });
+    const slots = await this.servicesService.listAvailabilitySlots(
+      vendor.userId!,
+      {
+        serviceId: service.id,
+        startDate: startIso,
+        days: 1,
+      },
+    );
 
     const slot = slots.find((candidate) => candidate.startAt === startIso);
     if (!slot) {
@@ -645,5 +680,50 @@ export class BookingsService {
     }
 
     return BookingCancelActor.SYSTEM;
+  }
+
+  private withPublicCustomerProfile(booking: BookingWithCustomerProfile) {
+    const { customer, ...rest } = booking;
+    return {
+      ...rest,
+      customerEmail: booking.customerEmail ?? customer?.email ?? null,
+      customerProfile: this.customerProfiles.buildPublicProfile(
+        customer?.customerProfile ?? null,
+      ),
+    };
+  }
+
+  private async resolveCustomerContext(
+    customerUserId?: string | null,
+  ): Promise<{ email: string; profile: CustomerProfile | null } | null> {
+    if (!customerUserId) {
+      return null;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: customerUserId },
+      select: {
+        email: true,
+        customerProfile: true,
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      email: user.email.toLowerCase(),
+      profile: user.customerProfile ?? null,
+    };
+  }
+
+  private normalizeNullable(value?: string | null): string | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 }

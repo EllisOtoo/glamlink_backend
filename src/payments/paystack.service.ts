@@ -83,14 +83,19 @@ export class PaystackService {
     };
   }
 
-  verifySignature(signature: string | undefined, rawBody: Buffer | undefined): boolean {
+  verifySignature(
+    signature: string | undefined,
+    rawBody: Buffer | undefined,
+  ): boolean {
     if (!signature || !rawBody) {
       return false;
     }
 
     const secret = this.getSecretKey();
     if (!secret) {
-      this.logger.warn('PAYSTACK_SECRET_KEY is not configured; rejecting webhook.');
+      this.logger.warn(
+        'PAYSTACK_SECRET_KEY is not configured; rejecting webhook.',
+      );
       return false;
     }
 
@@ -114,11 +119,15 @@ export class PaystackService {
         await this.handleChargeFailure(payload);
         break;
       default:
-        this.logger.debug(`Ignoring unsupported Paystack event: ${payload.event}`);
+        this.logger.debug(
+          `Ignoring unsupported Paystack event: ${payload.event}`,
+        );
     }
   }
 
-  private async handleChargeSuccess(payload: PaystackWebhookEvent): Promise<void> {
+  private async handleChargeSuccess(
+    payload: PaystackWebhookEvent,
+  ): Promise<void> {
     const data = payload.data;
     if (!data?.reference || typeof data.amount !== 'number') {
       this.logger.warn('charge.success missing reference or amount.');
@@ -135,7 +144,9 @@ export class PaystackService {
       });
 
       if (!paymentIntent) {
-        this.logger.warn(`Paystack reference ${data.reference} not recognised.`);
+        this.logger.warn(
+          `Paystack reference ${data.reference} not recognised.`,
+        );
         return;
       }
 
@@ -151,8 +162,11 @@ export class PaystackService {
           `Paystack amount mismatch for reference ${data.reference} (expected ${paymentIntent.amountPesewas}, got ${data.amount}).`,
         );
         const updatedBooking =
-          (await this.markIntentFailure(tx, paymentIntent, 'Amount mismatch')) ??
-          paymentIntent.booking;
+          (await this.markIntentFailure(
+            tx,
+            paymentIntent,
+            'Amount mismatch',
+          )) ?? paymentIntent.booking;
         failedBooking = {
           booking: updatedBooking,
           reason: 'Amount mismatch',
@@ -165,8 +179,11 @@ export class PaystackService {
           `Paystack currency mismatch for reference ${data.reference} (expected ${paymentIntent.currency}, got ${currency}).`,
         );
         const updatedBooking =
-          (await this.markIntentFailure(tx, paymentIntent, 'Currency mismatch')) ??
-          paymentIntent.booking;
+          (await this.markIntentFailure(
+            tx,
+            paymentIntent,
+            'Currency mismatch',
+          )) ?? paymentIntent.booking;
         failedBooking = {
           booking: updatedBooking,
           reason: 'Currency mismatch',
@@ -196,7 +213,10 @@ export class PaystackService {
     });
 
     if (failedBooking) {
-      const { booking, reason } = failedBooking as { booking: Booking; reason: string };
+      const { booking, reason } = failedBooking as {
+        booking: Booking;
+        reason: string;
+      };
       this.bookingEvents.emitPaymentFailed(booking, reason, {
         slotReleased: booking.status === BookingStatus.CANCELLED,
       });
@@ -214,7 +234,9 @@ export class PaystackService {
     }
   }
 
-  private async handleChargeFailure(payload: PaystackWebhookEvent): Promise<void> {
+  private async handleChargeFailure(
+    payload: PaystackWebhookEvent,
+  ): Promise<void> {
     const data = payload.data;
     if (!data?.reference) {
       this.logger.warn('Paystack failure event missing reference.');
@@ -230,7 +252,9 @@ export class PaystackService {
       });
 
       if (!paymentIntent) {
-        this.logger.warn(`Failure event reference not recognised: ${data.reference}`);
+        this.logger.warn(
+          `Failure event reference not recognised: ${data.reference}`,
+        );
         return;
       }
 

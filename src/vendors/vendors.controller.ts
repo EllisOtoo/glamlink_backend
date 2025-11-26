@@ -117,10 +117,7 @@ export class VendorsController {
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
   @Post('vendors/me/staff')
-  createStaff(
-    @CurrentUser() user: User,
-    @Body() dto: CreateStaffMemberDto,
-  ) {
+  createStaff(@CurrentUser() user: User, @Body() dto: CreateStaffMemberDto) {
     return this.vendorsService.createStaffMember(user.id, dto);
   }
 
@@ -231,9 +228,9 @@ export class VendorsController {
     return this.withLogoUrl(vendor);
   }
 
-  private withLogoUrl<T extends { logoStorageKey: string | null; logoVersion?: number | null }>(
-    vendor: T | null,
-  ): (T & { logoUrl: string | null }) | null {
+  private withLogoUrl<
+    T extends { logoStorageKey: string | null; logoVersion?: number | null },
+  >(vendor: T | null): (T & { logoUrl: string | null }) | null {
     if (!vendor) {
       return null;
     }

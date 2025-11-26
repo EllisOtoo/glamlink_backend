@@ -13,6 +13,7 @@ import { BookingsModule } from './bookings/bookings.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PublicModule } from './public/public.module';
+import { CustomerProfilesModule } from './customer-profiles/customer-profiles.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PublicModule } from './public/public.module';
     NotificationsModule,
     ReviewsModule,
     PublicModule,
+    CustomerProfilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

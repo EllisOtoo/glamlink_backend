@@ -22,7 +22,10 @@ import {
 import { CreateAvailabilityOverrideDto } from './dto/create-override.dto';
 import { AvailabilitySlotsQueryDto } from './dto/availability-slots.dto';
 import { StorageService } from '../storage/storage.service';
-import { normalizeMimeType, resolveImageExtension } from '../storage/media.helpers';
+import {
+  normalizeMimeType,
+  resolveImageExtension,
+} from '../storage/media.helpers';
 import {
   MAX_SERVICE_IMAGE_SIZE_BYTES,
   MAX_SERVICE_IMAGES_PER_SERVICE,
@@ -183,7 +186,9 @@ export class ServicesService {
     this.assertServiceImageConstraints(params.mimeType, params.sizeBytes);
     const extension = resolveImageExtension(params.mimeType);
     if (!extension) {
-      throw new BadRequestException('Unsupported image type for service media.');
+      throw new BadRequestException(
+        'Unsupported image type for service media.',
+      );
     }
     const storageKey = `vendors/${vendor.id}/services/${service.id}/${randomUUID()}.${extension}`;
     return this.storage.createPresignedUpload({
@@ -207,7 +212,9 @@ export class ServicesService {
     const normalizedKey = dto.storageKey.trim();
     const expectedPrefix = `vendors/${vendor.id}/services/${service.id}/`;
     if (!normalizedKey.startsWith(expectedPrefix)) {
-      throw new BadRequestException('Image storage key does not belong to this service.');
+      throw new BadRequestException(
+        'Image storage key does not belong to this service.',
+      );
     }
 
     const existingCount = await this.prisma.serviceImage.count({
@@ -293,7 +300,9 @@ export class ServicesService {
     const service = await this.requireService(vendor.id, serviceId);
     const uniqueIds = Array.from(new Set(dto.imageIds));
     if (uniqueIds.length !== dto.imageIds.length) {
-      throw new BadRequestException('Duplicate image identifiers are not allowed.');
+      throw new BadRequestException(
+        'Duplicate image identifiers are not allowed.',
+      );
     }
 
     const existingImages = await this.prisma.serviceImage.findMany({
@@ -301,7 +310,9 @@ export class ServicesService {
       orderBy: { sortOrder: 'asc' },
     });
 
-    if (uniqueIds.some((id) => !existingImages.find((image) => image.id === id))) {
+    if (
+      uniqueIds.some((id) => !existingImages.find((image) => image.id === id))
+    ) {
       throw new BadRequestException(
         'One or more images do not belong to this service.',
       );
@@ -499,7 +510,9 @@ export class ServicesService {
       throw new NotFoundException('Service not found or inactive.');
     }
 
-    const startDate = params.startDate ? new Date(params.startDate) : new Date();
+    const startDate = params.startDate
+      ? new Date(params.startDate)
+      : new Date();
     if (Number.isNaN(startDate.getTime())) {
       throw new BadRequestException('Invalid start date.');
     }
@@ -698,12 +711,18 @@ export class ServicesService {
       throw new BadRequestException('Image mime type is required.');
     }
 
-    if (typeof sizeBytes !== 'number' || Number.isNaN(sizeBytes) || sizeBytes <= 0) {
+    if (
+      typeof sizeBytes !== 'number' ||
+      Number.isNaN(sizeBytes) ||
+      sizeBytes <= 0
+    ) {
       throw new BadRequestException('Image size must be provided.');
     }
 
     if (sizeBytes > MAX_SERVICE_IMAGE_SIZE_BYTES) {
-      throw new BadRequestException('Service image exceeds the maximum allowed size.');
+      throw new BadRequestException(
+        'Service image exceeds the maximum allowed size.',
+      );
     }
 
     if (!resolveImageExtension(normalizedMime)) {

@@ -19,7 +19,8 @@ const base64UrlEncode = (input: string | Buffer): string =>
 
 const base64UrlDecode = (input: string): string => {
   const padLength = 4 - (input.length % 4 || 4);
-  const normalized = input.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength % 4);
+  const normalized =
+    input.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength % 4);
   return Buffer.from(normalized, 'base64').toString('utf8');
 };
 

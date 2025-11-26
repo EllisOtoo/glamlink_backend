@@ -18,11 +18,7 @@ export class ReviewsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async createReview(
-    user: User,
-    bookingId: string,
-    dto: CreateReviewDto,
-  ) {
+  async createReview(user: User, bookingId: string, dto: CreateReviewDto) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
@@ -40,9 +36,7 @@ export class ReviewsService {
     }
 
     if (booking.status !== BookingStatus.COMPLETED) {
-      throw new BadRequestException(
-        'You can only review completed bookings.',
-      );
+      throw new BadRequestException('You can only review completed bookings.');
     }
 
     if (!booking.vendor.userId) {
@@ -50,7 +44,9 @@ export class ReviewsService {
     }
 
     if (booking.review) {
-      throw new BadRequestException('A review already exists for this booking.');
+      throw new BadRequestException(
+        'A review already exists for this booking.',
+      );
     }
 
     const trimmedComment =
@@ -74,7 +70,7 @@ export class ReviewsService {
 
     await this.notifications.notifyReviewSubmitted({
       reviewId: review.id,
-      vendorUserId: booking.vendor.userId!,
+      vendorUserId: booking.vendor.userId,
       serviceName: review.booking.service.name,
       rating: review.rating,
     });

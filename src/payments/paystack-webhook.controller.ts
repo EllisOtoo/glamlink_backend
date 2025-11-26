@@ -21,9 +21,7 @@ export class PaystackWebhookController {
     @Req() request: RawBodyRequest<Request>,
     @Headers('x-paystack-signature') signature?: string,
   ) {
-    if (
-      !this.paystackService.verifySignature(signature, request.rawBody)
-    ) {
+    if (!this.paystackService.verifySignature(signature, request.rawBody)) {
       throw new UnauthorizedException('Invalid Paystack signature.');
     }
 
