@@ -7,10 +7,12 @@ import {
   PaymentStatus,
   Booking,
   SupplyOrderStatus,
+  PaymentIntent,
 } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { BookingEventsService } from '../events/booking-events.service';
 import { CalendarService } from '../calendar/calendar.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface PaystackCheckoutPayload {
   publicKey: string;
@@ -54,6 +56,7 @@ export class PaystackService {
     private readonly prisma: PrismaService,
     private readonly bookingEvents: BookingEventsService,
     private readonly calendarService: CalendarService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   getPublicKey(): string {
@@ -288,6 +291,22 @@ export class PaystackService {
       this.logger.log(
         `Supply order ${supplyOrderId} payment succeeded for reference ${data.reference}.`,
       );
+      const order = await this.prisma.supplyOrder.findUnique({
+        where: { id: supplyOrderId },
+        include: {
+          vendor: {
+            select: { businessName: true },
+          },
+        },
+      });
+      if (order) {
+        await this.notifications.notifyOpsSupplyOrderPaid({
+          orderId: order.id,
+          vendorName: order.vendor?.businessName ?? null,
+          totalCents: order.totalCents,
+          deliveryFeeCents: order.deliveryFeeCents,
+        });
+      }
     }
   }
 

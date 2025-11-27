@@ -198,11 +198,38 @@ export class SuppliesService {
     const vendor = await this.requireVendor(userId);
     this.assertPilotAccess(vendor.id);
 
+    const searchTerm = query.search?.trim();
+
     const products = await this.prisma.supplyProduct.findMany({
       where: {
         isActive: true,
         inStock: true,
         category: query.category ?? undefined,
+        OR:
+          searchTerm && searchTerm.length > 0
+            ? [
+                {
+                  name: {
+                    contains: searchTerm,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  category: {
+                    contains: searchTerm,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  supplier: {
+                    name: {
+                      contains: searchTerm,
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              ]
+            : undefined,
       },
       include: productInclude,
       orderBy: { createdAt: 'desc' },

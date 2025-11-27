@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createTransport, Transporter } from 'nodemailer';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import {
@@ -17,8 +19,51 @@ interface PushMessage {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly expoPushEndpoint = 'https://exp.host/--/api/v2/push/send';
+  private readonly transporter?: Transporter;
+  private readonly fromAddress: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    const host = this.configService.get<string>('SMTP_HOST');
+    const port = this.configService.get<string>('SMTP_PORT');
+    const secure =
+      this.configService.get<string | boolean>('SMTP_SECURE') ?? false;
+    const user = this.configService.get<string>('SMTP_USER');
+    const pass = this.configService.get<string>('SMTP_PASSWORD');
+
+    this.fromAddress =
+      this.configService.get<string>('NOTIFICATIONS_FROM_EMAIL') ??
+      this.configService.get<string>('OTP_FROM_EMAIL') ??
+      'no-reply@glamlink.local';
+
+    if (host && port) {
+      const transportConfig: {
+        host: string;
+        port: number;
+        secure: boolean;
+        auth?: {
+          user: string;
+          pass: string;
+        };
+      } = {
+        host,
+        port: Number(port),
+        secure: secure === true || secure === 'true',
+      };
+
+      if (user && pass) {
+        transportConfig.auth = { user, pass };
+      }
+
+      this.transporter = createTransport(transportConfig);
+    } else {
+      this.logger.warn(
+        'SMTP host/port not configured. Notifications email will be logged to console.',
+      );
+    }
+  }
 
   async registerPushToken(userId: string, dto: RegisterPushTokenDto) {
     const platform: PushPlatform = dto.platform ?? 'EXPO';
@@ -244,5 +289,92 @@ export class NotificationsService {
     );
     const tokens = tokenBatches.flat();
     await this.sendExpoPush(tokens, message);
+  }
+
+  async notifyOpsSupplyOrderPaid(payload: {
+    orderId: string;
+    vendorName?: string | null;
+    totalCents?: number;
+    deliveryFeeCents?: number | null;
+  }) {
+    const recipients = this.getOpsEmails();
+    if (recipients.length === 0) {
+      this.logger.warn(
+        'Supply order paid email skipped; OPS_SUPPLY_EMAILS not configured.',
+      );
+      return;
+    }
+
+    const totalGhs =
+      typeof payload.totalCents === 'number'
+        ? (payload.totalCents / 100).toFixed(2)
+        : null;
+    const deliveryGhs =
+      typeof payload.deliveryFeeCents === 'number'
+        ? (payload.deliveryFeeCents / 100).toFixed(2)
+        : null;
+
+    const subject = `Supply order paid: ${payload.vendorName ?? payload.orderId}`;
+    const lines = [
+      `Order ID: ${payload.orderId}`,
+      `Vendor: ${payload.vendorName ?? 'Unknown vendor'}`,
+    ];
+    if (totalGhs) {
+      lines.push(`Total (vendor pay): GHS ${totalGhs}`);
+    }
+    if (deliveryGhs) {
+      lines.push(`Delivery fee: GHS ${deliveryGhs}`);
+    }
+    lines.push('Status: WAITING_ON_SUPPLIER');
+
+    await this.sendEmail({
+      to: recipients,
+      subject,
+      text: lines.join('\n'),
+      html: `<p>${lines.join('<br/>')}</p>`,
+    });
+  }
+
+  private getOpsEmails(): string[] {
+    return (this.configService.get<string>('OPS_SUPPLY_EMAILS') ?? '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  private async sendEmail(payload: {
+    to: string[];
+    subject: string;
+    text: string;
+    html: string;
+  }) {
+    if (!payload.to || payload.to.length === 0) {
+      return;
+    }
+
+    if (!this.transporter) {
+      this.logger.log(
+        `Email to ${payload.to.join(', ')} | ${payload.subject}\n${payload.text}`,
+      );
+      return;
+    }
+
+    try {
+      await this.transporter.sendMail({
+        from: this.fromAddress,
+        to: payload.to,
+        subject: payload.subject,
+        text: payload.text,
+        html: payload.html,
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to send notification email to ${payload.to.join(', ')}. Reason: ${reason}. Falling back to log.`,
+      );
+      this.logger.log(
+        `Email to ${payload.to.join(', ')} | ${payload.subject}\n${payload.text}`,
+      );
+    }
   }
 }
