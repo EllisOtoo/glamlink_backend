@@ -40,6 +40,7 @@ model Vendor {
   bookings              Booking[]
   calendarEntries       BookingCalendarEntry[]
   reviews               Review[]
+  supplyOrders          SupplyOrder[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -253,8 +254,8 @@ model Booking {
 
 model PaymentIntent {
   id            String          @id @default(cuid())
-  bookingId     String          @unique
-  booking       Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  bookingId     String?         @unique
+  booking       Booking?        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   provider      PaymentProvider
   providerRef   String          @unique
   status        PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
@@ -266,6 +267,7 @@ model PaymentIntent {
   cancelledAt   DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+  supplyOrder   SupplyOrder?
 }
 
 enum BookingStatus {
@@ -446,6 +448,7 @@ model SupplySupplier {
   priority      Int?
   isActive      Boolean         @default(true)
   products      SupplyProduct[]
+  orderItems    SupplyOrderItem[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -467,6 +470,7 @@ model SupplyProduct {
   inStock          Boolean         @default(true)
   stockRefreshedAt DateTime?
   prices           SupplyPrice[]
+  orderItems       SupplyOrderItem[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
@@ -487,4 +491,62 @@ model SupplyPrice {
   createdAt          DateTime       @default(now())
 
   @@index([productId, startsAt])
+}
+
+model SupplyOrder {
+  id              String                 @id @default(cuid())
+  vendorId        String
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  totalCents      Int
+  deliveryFeeCents Int                   @default(0)
+  status          SupplyOrderStatus      @default(DRAFT)
+  paymentIntentId String?                @unique
+  paymentIntent   PaymentIntent?         @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+  note            String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  items           SupplyOrderItem[]
+  history         SupplyOrderStatusHistory[]
+
+  @@index([vendorId, status])
+}
+
+model SupplyOrderItem {
+  id                 String        @id @default(cuid())
+  orderId            String
+  order              SupplyOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId          String
+  product            SupplyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supplierId         String
+  supplier           SupplySupplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  name               String
+  category           String
+  unit               String?
+  leadTimeDays       Int?
+  quantity           Int
+  vendorPriceCents   Int
+  supplierCostCents  Int
+  createdAt          DateTime      @default(now())
+}
+
+model SupplyOrderStatusHistory {
+  id        String            @id @default(cuid())
+  orderId   String
+  order     SupplyOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus SupplyOrderStatus?
+  toStatus  SupplyOrderStatus
+  note      String?
+  createdAt DateTime          @default(now())
+
+  @@index([orderId])
+}
+
+enum SupplyOrderStatus {
+  DRAFT
+  REQUIRES_PAYMENT
+  WAITING_ON_SUPPLIER
+  CONFIRMED
+  OUT_FOR_DELIVERY
+  FULFILLED
+  CANCELLED
 }

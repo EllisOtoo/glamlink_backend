@@ -7,6 +7,7 @@ import {
   PaymentStatus,
   Booking,
   PaymentIntent,
+  SupplyOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { BookingEventsService } from '../events/booking-events.service';
@@ -150,10 +151,11 @@ export class PaystackService {
     const currency = (data.currency ?? 'GHS').toUpperCase();
     let confirmedBooking: Booking | null = null;
     let failedBooking: { booking: Booking; reason: string } | null = null;
+    let supplyOrderId: string | null = null;
     await this.prisma.$transaction(async (tx) => {
       const paymentIntent = await tx.paymentIntent.findUnique({
         where: { providerRef: data.reference },
-        include: { booking: true },
+        include: { booking: true, supplyOrder: true },
       });
 
       if (!paymentIntent) {
@@ -174,16 +176,17 @@ export class PaystackService {
         this.logger.warn(
           `Paystack amount mismatch for reference ${data.reference} (expected ${paymentIntent.amountPesewas}, got ${data.amount}).`,
         );
-        const updatedBooking =
-          (await this.markIntentFailure(
-            tx,
-            paymentIntent,
-            'Amount mismatch',
-          )) ?? paymentIntent.booking;
-        failedBooking = {
-          booking: updatedBooking,
-          reason: 'Amount mismatch',
-        };
+        const failure = await this.markIntentFailure(
+          tx,
+          paymentIntent,
+          'Amount mismatch',
+        );
+        if (failure?.booking) {
+          failedBooking = {
+            booking: failure.booking,
+            reason: 'Amount mismatch',
+          };
+        }
         return;
       }
 
@@ -191,16 +194,17 @@ export class PaystackService {
         this.logger.warn(
           `Paystack currency mismatch for reference ${data.reference} (expected ${paymentIntent.currency}, got ${currency}).`,
         );
-        const updatedBooking =
-          (await this.markIntentFailure(
-            tx,
-            paymentIntent,
-            'Currency mismatch',
-          )) ?? paymentIntent.booking;
-        failedBooking = {
-          booking: updatedBooking,
-          reason: 'Currency mismatch',
-        };
+        const failure = await this.markIntentFailure(
+          tx,
+          paymentIntent,
+          'Currency mismatch',
+        );
+        if (failure?.booking) {
+          failedBooking = {
+            booking: failure.booking,
+            reason: 'Currency mismatch',
+          };
+        }
         return;
       }
 
@@ -217,12 +221,29 @@ export class PaystackService {
         },
       });
 
-      confirmedBooking = await tx.booking.update({
-        where: { id: paymentIntent.bookingId },
-        data: {
-          status: BookingStatus.CONFIRMED,
-        },
-      });
+      if (paymentIntent.booking) {
+        confirmedBooking = await tx.booking.update({
+          where: { id: paymentIntent.bookingId! },
+          data: {
+            status: BookingStatus.CONFIRMED,
+          },
+        });
+      } else if (paymentIntent.supplyOrder) {
+        await tx.supplyOrder.update({
+          where: { id: paymentIntent.supplyOrder.id },
+          data: {
+            status: 'WAITING_ON_SUPPLIER',
+            history: {
+              create: {
+                fromStatus: paymentIntent.supplyOrder.status,
+                toStatus: 'WAITING_ON_SUPPLIER',
+                note: 'Payment confirmed via Paystack.',
+              },
+            },
+          },
+        });
+        supplyOrderId = paymentIntent.supplyOrder.id;
+      }
     });
 
     if (failedBooking) {
@@ -244,6 +265,10 @@ export class PaystackService {
         channel: data.channel ?? null,
       });
       await this.calendarService.syncEntriesForBooking(confirmedBooking);
+    } else if (supplyOrderId) {
+      this.logger.log(
+        `Supply order ${supplyOrderId} payment succeeded for reference ${data.reference}.`,
+      );
     }
   }
 
@@ -257,11 +282,12 @@ export class PaystackService {
     }
 
     let affectedBooking: Booking | null = null;
+    let affectedSupplyOrderId: string | null = null;
     const failureReason = `Paystack reported ${payload.event}`;
     await this.prisma.$transaction(async (tx) => {
       const paymentIntent = await tx.paymentIntent.findUnique({
         where: { providerRef: data.reference },
-        include: { booking: true },
+        include: { booking: true, supplyOrder: true },
       });
 
       if (!paymentIntent) {
@@ -271,10 +297,17 @@ export class PaystackService {
         return;
       }
 
-      const updatedBooking =
-        (await this.markIntentFailure(tx, paymentIntent, failureReason)) ??
-        paymentIntent.booking;
-      affectedBooking = updatedBooking;
+      const result = await this.markIntentFailure(
+        tx,
+        paymentIntent,
+        failureReason,
+      );
+      if (result?.booking) {
+        affectedBooking = result.booking;
+      }
+      if (result?.supplyOrderId) {
+        affectedSupplyOrderId = result.supplyOrderId;
+      }
     });
 
     if (affectedBooking) {
@@ -284,13 +317,19 @@ export class PaystackService {
       });
       await this.calendarService.syncEntriesForBooking(booking);
     }
+
+    if (affectedSupplyOrderId) {
+      this.logger.warn(
+        `Supply order ${affectedSupplyOrderId} marked as failed for reference ${data.reference}`,
+      );
+    }
   }
 
   private async markIntentFailure(
     tx: Prisma.TransactionClient,
-    paymentIntent: PaymentIntent & { booking: Booking },
+    paymentIntent: PaymentIntent & { booking: Booking | null; supplyOrder?: { id: string; status: SupplyOrderStatus } | null },
     reason: string,
-  ): Promise<Booking | null> {
+  ): Promise<{ booking: Booking | null; supplyOrderId?: string } | null> {
     await tx.paymentIntent.update({
       where: { id: paymentIntent.id },
       data: {
@@ -300,19 +339,41 @@ export class PaystackService {
     });
 
     if (
-      paymentIntent.booking.status === BookingStatus.AWAITING_PAYMENT ||
-      paymentIntent.booking.status === BookingStatus.PENDING
+      paymentIntent.booking &&
+      (paymentIntent.booking.status === BookingStatus.AWAITING_PAYMENT ||
+        paymentIntent.booking.status === BookingStatus.PENDING)
     ) {
-      return tx.booking.update({
-        where: { id: paymentIntent.bookingId },
+      const booking = await tx.booking.update({
+        where: { id: paymentIntent.bookingId! },
         data: {
           status: BookingStatus.CANCELLED,
           cancelledAt: new Date(),
         },
       });
+      return { booking };
     }
 
-    return null;
+    if (
+      paymentIntent.supplyOrder &&
+      paymentIntent.supplyOrder.status === 'REQUIRES_PAYMENT'
+    ) {
+      await tx.supplyOrder.update({
+        where: { id: paymentIntent.supplyOrder.id },
+        data: {
+          status: 'CANCELLED',
+          history: {
+            create: {
+              fromStatus: paymentIntent.supplyOrder.status,
+              toStatus: 'CANCELLED',
+              note: reason,
+            },
+          },
+        },
+      });
+      return { booking: null, supplyOrderId: paymentIntent.supplyOrder.id };
+    }
+
+    return { booking: paymentIntent.booking ?? null };
   }
 
   private mergeMetadata(

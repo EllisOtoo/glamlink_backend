@@ -15,6 +15,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { PublicModule } from './public/public.module';
 import { CustomerProfilesModule } from './customer-profiles/customer-profiles.module';
 import { SuppliesModule } from './supplies/supplies.module';
+import { SupplyOrdersModule } from './supply-orders/supply-orders.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { SuppliesModule } from './supplies/supplies.module';
     PublicModule,
     CustomerProfilesModule,
     SuppliesModule,
+    SupplyOrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
