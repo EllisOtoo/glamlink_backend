@@ -6,7 +6,6 @@ import {
   BookingStatus,
   PaymentStatus,
   Booking,
-  PaymentIntent,
   SupplyOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma';
@@ -36,6 +35,15 @@ export interface PaystackWebhookEvent {
     channel?: string;
   };
 }
+
+const paymentIntentInclude = {
+  booking: true,
+  supplyOrder: true,
+} satisfies Prisma.PaymentIntentInclude;
+
+type PaymentIntentWithRelations = Prisma.PaymentIntentGetPayload<{
+  include: typeof paymentIntentInclude;
+}>;
 
 @Injectable()
 export class PaystackService {
@@ -153,16 +161,27 @@ export class PaystackService {
     let failedBooking: { booking: Booking; reason: string } | null = null;
     let supplyOrderId: string | null = null;
     await this.prisma.$transaction(async (tx) => {
-      const paymentIntent = await tx.paymentIntent.findUnique({
-        where: { providerRef: data.reference },
-        include: { booking: true, supplyOrder: true },
-      });
+      let paymentIntent = await this.findPaymentIntentForEvent(tx, data);
 
       if (!paymentIntent) {
         this.logger.warn(
           `Paystack reference ${data.reference} not recognised.`,
         );
         return;
+      }
+
+      if (
+        data.reference &&
+        paymentIntent.providerRef !== data.reference
+      ) {
+        await tx.paymentIntent.update({
+          where: { id: paymentIntent.id },
+          data: { providerRef: data.reference },
+        });
+        paymentIntent = (await tx.paymentIntent.findUnique({
+          where: { id: paymentIntent.id },
+          include: paymentIntentInclude,
+        }))!;
       }
 
       if (paymentIntent.status === PaymentStatus.SUCCEEDED) {
@@ -285,16 +304,27 @@ export class PaystackService {
     let affectedSupplyOrderId: string | null = null;
     const failureReason = `Paystack reported ${payload.event}`;
     await this.prisma.$transaction(async (tx) => {
-      const paymentIntent = await tx.paymentIntent.findUnique({
-        where: { providerRef: data.reference },
-        include: { booking: true, supplyOrder: true },
-      });
+      let paymentIntent = await this.findPaymentIntentForEvent(tx, data);
 
       if (!paymentIntent) {
         this.logger.warn(
           `Failure event reference not recognised: ${data.reference}`,
         );
         return;
+      }
+
+      if (
+        data.reference &&
+        paymentIntent.providerRef !== data.reference
+      ) {
+        await tx.paymentIntent.update({
+          where: { id: paymentIntent.id },
+          data: { providerRef: data.reference },
+        });
+        paymentIntent = (await tx.paymentIntent.findUnique({
+          where: { id: paymentIntent.id },
+          include: paymentIntentInclude,
+        }))!;
       }
 
       const result = await this.markIntentFailure(
@@ -327,7 +357,7 @@ export class PaystackService {
 
   private async markIntentFailure(
     tx: Prisma.TransactionClient,
-    paymentIntent: PaymentIntent & { booking: Booking | null; supplyOrder?: { id: string; status: SupplyOrderStatus } | null },
+    paymentIntent: PaymentIntentWithRelations,
     reason: string,
   ): Promise<{ booking: Booking | null; supplyOrderId?: string } | null> {
     await tx.paymentIntent.update({
@@ -385,5 +415,88 @@ export class PaystackService {
         ? (existing as Record<string, unknown>)
         : {};
     return { ...base, ...patch } as Prisma.InputJsonValue;
+  }
+
+  private normalizeMetadata(
+    metadata?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (
+      metadata &&
+      typeof metadata === 'object' &&
+      !Array.isArray(metadata)
+    ) {
+      return metadata;
+    }
+    return {};
+  }
+
+  private async findPaymentIntentForEvent(
+    tx: Prisma.TransactionClient,
+    data: PaystackWebhookEvent['data'],
+  ): Promise<PaymentIntentWithRelations | null> {
+    if (!data) {
+      return null;
+    }
+
+    const metadata = this.normalizeMetadata(data.metadata);
+    const reference = data.reference;
+    const paymentIntentId =
+      typeof metadata.paymentIntentId === 'string'
+        ? metadata.paymentIntentId
+        : null;
+    const bookingId =
+      typeof metadata.bookingId === 'string'
+        ? metadata.bookingId
+        : null;
+    const supplyOrderId =
+      typeof metadata.orderId === 'string' ? metadata.orderId : null;
+
+    if (reference) {
+      const byRef = await tx.paymentIntent.findUnique({
+        where: { providerRef: reference },
+        include: paymentIntentInclude,
+      });
+      if (byRef) {
+        return byRef;
+      }
+    }
+
+    if (paymentIntentId) {
+      const byId = await tx.paymentIntent.findUnique({
+        where: { id: paymentIntentId },
+        include: paymentIntentInclude,
+      });
+      if (byId) {
+        return byId;
+      }
+    }
+
+    if (bookingId) {
+      const byBooking = await tx.paymentIntent.findUnique({
+        where: { bookingId },
+        include: paymentIntentInclude,
+      });
+      if (byBooking) {
+        return byBooking;
+      }
+    }
+
+    if (supplyOrderId) {
+      const order = await tx.supplyOrder.findUnique({
+        where: { id: supplyOrderId },
+        select: { paymentIntentId: true },
+      });
+      if (order?.paymentIntentId) {
+        const byOrder = await tx.paymentIntent.findUnique({
+          where: { id: order.paymentIntentId },
+          include: paymentIntentInclude,
+        });
+        if (byOrder) {
+          return byOrder;
+        }
+      }
+    }
+
+    return null;
   }
 }

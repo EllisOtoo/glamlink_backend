@@ -125,6 +125,9 @@ export class SupplyOrdersService {
       reference: paystackRef,
       amountPesewas: totalCents,
       vendorEmail: vendor.contactEmail ?? 'no-email@glamlink.app',
+      orderId: order.id,
+      paymentIntentId: paymentIntent.id,
+      vendorId: vendor.id,
     });
 
     return {
@@ -151,6 +154,9 @@ export class SupplyOrdersService {
     reference: string;
     amountPesewas: number;
     vendorEmail: string;
+    orderId: string;
+    paymentIntentId: string;
+    vendorId: string;
   }) {
     return {
       publicKey: this.paystack.getPublicKey(),
@@ -160,6 +166,9 @@ export class SupplyOrdersService {
       email: params.vendorEmail,
       metadata: {
         type: 'SUPPLY_ORDER',
+        orderId: params.orderId,
+        paymentIntentId: params.paymentIntentId,
+        vendorId: params.vendorId,
       },
     };
   }
