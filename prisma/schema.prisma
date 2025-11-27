@@ -436,3 +436,55 @@ model Review {
   @@index([vendorId])
   @@index([customerUserId])
 }
+
+model SupplySupplier {
+  id            String          @id @default(cuid())
+  name          String
+  contactEmail  String?
+  phoneNumber   String?
+  serviceAreas  String[]        @default([])
+  priority      Int?
+  isActive      Boolean         @default(true)
+  products      SupplyProduct[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([isActive])
+}
+
+model SupplyProduct {
+  id               String          @id @default(cuid())
+  supplierId       String
+  supplier         SupplySupplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  category         String
+  name             String
+  description      String?
+  unit             String?
+  leadTimeDays     Int?
+  mediaUrl         String?
+  attributes       Json?
+  isActive         Boolean         @default(true)
+  inStock          Boolean         @default(true)
+  stockRefreshedAt DateTime?
+  prices           SupplyPrice[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([supplierId, isActive])
+  @@index([category, isActive])
+  @@index([inStock, isActive])
+}
+
+model SupplyPrice {
+  id                 String         @id @default(cuid())
+  productId          String
+  product            SupplyProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplierCostCents  Int
+  markupBasisPoints  Int
+  vendorPriceCents   Int
+  startsAt           DateTime       @default(now())
+  endsAt             DateTime?
+  createdAt          DateTime       @default(now())
+
+  @@index([productId, startsAt])
+}
