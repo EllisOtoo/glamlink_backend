@@ -19,4 +19,4 @@ COPY --from=base /app/dist ./dist
 COPY --from=base /app/node_modules ./node_modules
 COPY package.json ./
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

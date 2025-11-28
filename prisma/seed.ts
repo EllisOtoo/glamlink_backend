@@ -129,6 +129,16 @@ const products: ProductSeed[] = [
     supplierCostCents: 900,
     markupPercent: 18,
   },
+  {
+    supplierName: 'Glow Beauty Supply',
+    category: 'hair',
+    name: 'Edge Control Sample',
+    unit: 'jar',
+    leadTimeDays: 0,
+    description: 'Sample-sized edge control for quick tests.',
+    supplierCostCents: 100,
+    markupPercent: 18,
+  },
   // Nails
   {
     supplierName: 'Nail Lab Depot',
