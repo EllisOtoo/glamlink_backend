@@ -7,6 +7,7 @@ import { VendorStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { StorageService } from '../storage/storage.service';
 import { ServicesService } from '../services/services.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import type { DiscoverServicesQueryDto } from './dto/discover-services.dto';
 import type { NearbyServicesQueryDto } from './dto/nearby-services.dto';
 
@@ -136,9 +137,11 @@ export class PublicCatalogService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly servicesService: ServicesService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   async highlightVendors(limit = 6): Promise<VendorSummary[]> {
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
     const vendors = await this.prisma.vendor.findMany({
       where: {
         status: VendorStatus.VERIFIED,
@@ -178,7 +181,7 @@ export class PublicCatalogService {
             _count: { rating: true },
           });
 
-    return this.mapVendorSummaries(vendors, reviewAggregates);
+    return this.mapVendorSummaries(vendors, reviewAggregates, markupBps);
   }
 
   async searchVendorsByHandle(
@@ -191,6 +194,7 @@ export class PublicCatalogService {
       throw new BadRequestException('Handle is required to search vendors.');
     }
 
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
     const vendors = await this.prisma.vendor.findMany({
       where: {
         status: VendorStatus.VERIFIED,
@@ -231,7 +235,7 @@ export class PublicCatalogService {
             _count: { rating: true },
           });
 
-    return this.mapVendorSummaries(vendors, reviewAggregates);
+    return this.mapVendorSummaries(vendors, reviewAggregates, markupBps);
   }
 
   async getVendorByHandle(handle: string): Promise<VendorDetailSummary> {
@@ -283,9 +287,14 @@ export class PublicCatalogService {
       },
     ];
 
-    const vendorSummary = this.mapVendorSummary(vendor, reviewSummaries);
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
+    const vendorSummary = this.mapVendorSummary(
+      vendor,
+      reviewSummaries,
+      markupBps,
+    );
     const serviceSummaries = services.map((service) =>
-      this.mapServiceSummary(service, reviewSummaries),
+      this.mapServiceSummary(service, reviewSummaries, markupBps),
     );
 
     return {
@@ -321,6 +330,8 @@ export class PublicCatalogService {
 
     const limit = query.limit ?? 12;
 
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
+
     const services = await this.prisma.service.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }],
@@ -344,7 +355,9 @@ export class PublicCatalogService {
 
     return services
       .filter((service) => service.vendor)
-      .map((service) => this.mapServiceSummary(service, reviewAggregates));
+      .map((service) =>
+        this.mapServiceSummary(service, reviewAggregates, markupBps),
+      );
   }
 
   async discoverNearbyServices(
@@ -353,6 +366,7 @@ export class PublicCatalogService {
     const { latitude, longitude } = query;
     const radiusKm = query.radiusKm ?? 15;
 
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
     const services = await this.prisma.service.findMany({
       where: {
         isActive: true,
@@ -425,7 +439,7 @@ export class PublicCatalogService {
       .slice(0, 24);
 
     return withDistance.map(({ service, distanceKm }) => ({
-      ...this.mapServiceSummary(service, reviewAggregates),
+      ...this.mapServiceSummary(service, reviewAggregates, markupBps),
       distanceKm,
     }));
   }
@@ -433,15 +447,20 @@ export class PublicCatalogService {
   private mapServiceSummary(
     service: ServiceWithRelations,
     reviewAggregates: ReviewAggregate[],
+    markupBps: number,
   ): ServiceSummary {
     const vendor = service.vendor;
-    const vendorSummary = this.mapVendorSummary(vendor, reviewAggregates);
+    const vendorSummary = this.mapVendorSummary(
+      vendor,
+      reviewAggregates,
+      markupBps,
+    );
 
     return {
       id: service.id,
       name: service.name,
       description: service.description ?? null,
-      priceCents: service.priceCents,
+      priceCents: this.applyMarkup(service.priceCents, markupBps),
       durationMinutes: service.durationMinutes,
       createdAt: service.createdAt,
       vendor: vendorSummary,
@@ -533,13 +552,18 @@ export class PublicCatalogService {
       _count: { rating: true },
     });
 
-    const summary = this.mapServiceSummary(service, [
-      {
-        vendorId: service.vendor.id,
-        _avg: { rating: reviewAggregate._avg.rating ?? null },
-        _count: { rating: reviewAggregate._count.rating ?? 0 },
-      },
-    ]);
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
+    const summary = this.mapServiceSummary(
+      service,
+      [
+        {
+          vendorId: service.vendor.id,
+          _avg: { rating: reviewAggregate._avg.rating ?? null },
+          _count: { rating: reviewAggregate._count.rating ?? 0 },
+        },
+      ],
+      markupBps,
+    );
 
     const seats = await this.listSeatsForService(service.vendor.id, service.id);
 
@@ -580,21 +604,27 @@ export class PublicCatalogService {
   private mapVendorSummaries(
     vendors: VendorSummarySource[],
     reviewAggregates: ReviewAggregate[],
+    markupBps: number,
   ): VendorSummary[] {
     return vendors.map((vendor) =>
-      this.mapVendorSummary(vendor, reviewAggregates),
+      this.mapVendorSummary(vendor, reviewAggregates, markupBps),
     );
   }
 
   private mapVendorSummary(
     vendor: VendorSummarySource,
     reviewAggregates: ReviewAggregate[],
+    markupBps: number,
   ): VendorSummary {
     const summary = reviewAggregates.find(
       (aggregate) => aggregate.vendorId === vendor.id,
     );
     const startingPriceCents = vendor.services.length
-      ? Math.min(...vendor.services.map((service) => service.priceCents))
+      ? Math.min(
+          ...vendor.services.map((service) =>
+            this.applyMarkup(service.priceCents, markupBps),
+          ),
+        )
       : null;
 
     return {
@@ -613,6 +643,12 @@ export class PublicCatalogService {
       ratingCount: summary?._count.rating ?? 0,
       startingPriceCents,
     };
+  }
+
+  private applyMarkup(amount: number, basisPoints: number): number {
+    const multiplier = 1 + basisPoints / 10000;
+    const computed = Math.round(amount * multiplier);
+    return computed > 0 ? computed : amount;
   }
 
   private normalizeHandle(handle: string): string {

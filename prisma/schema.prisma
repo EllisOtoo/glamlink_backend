@@ -66,6 +66,7 @@ model User {
   calendarEntries  BookingCalendarEntry[] @relation("CalendarCustomerEntries")
   pushTokens       PushToken[]
   writtenReviews   Review[]
+  platformSettingsUpdated PlatformSetting[] @relation("PlatformSettingUpdatedBy")
 }
 
 model EmailOtp {
@@ -559,4 +560,19 @@ enum SupplyOrderStatus {
   OUT_FOR_DELIVERY
   FULFILLED
   CANCELLED
+}
+
+model PlatformSetting {
+  id           String               @id @default(cuid())
+  key          PlatformSettingKey   @unique
+  intValue     Int?
+  updatedById  String?
+  updatedBy    User?                @relation("PlatformSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt    DateTime             @default(now())
+
+  @@index([key])
+}
+
+enum PlatformSettingKey {
+  SERVICE_MARKUP_BPS
 }

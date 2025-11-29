@@ -28,6 +28,7 @@ import { CalendarService } from '../calendar/calendar.service';
 import { CustomerProfilesService } from '../customer-profiles/customer-profiles.service';
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -58,6 +59,7 @@ export class BookingsService {
     private readonly bookingEvents: BookingEventsService,
     private readonly calendarService: CalendarService,
     private readonly customerProfiles: CustomerProfilesService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   async createPublicBooking(
@@ -133,7 +135,12 @@ export class BookingsService {
       );
     }
 
-    const price = this.assertPositiveInt(service.priceCents);
+    const basePrice = this.assertPositiveInt(service.priceCents);
+    const serviceMarkupBps = await this.platformSettings.getServiceMarkupBps();
+    const price = this.platformSettings.applyServiceMarkup(
+      basePrice,
+      serviceMarkupBps,
+    );
     const depositPercent = this.resolveDepositPercent(service.depositPercent);
     const calculatedDeposit = Math.min(
       price,

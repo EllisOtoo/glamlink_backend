@@ -10,6 +10,7 @@ import { BookingsService } from './bookings.service';
 import { PublicBookingsController } from './public-bookings.controller';
 import { BookingsController } from './bookings.controller';
 import { BookingRemindersService } from './reminders.service';
+import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { BookingRemindersService } from './reminders.service';
     AuthModule,
     CalendarModule,
     CustomerProfilesModule,
+    PlatformSettingsModule,
   ],
   controllers: [PublicBookingsController, BookingsController],
   providers: [BookingsService, BookingRemindersService],

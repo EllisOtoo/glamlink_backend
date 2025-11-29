@@ -16,6 +16,7 @@ import { PublicModule } from './public/public.module';
 import { CustomerProfilesModule } from './customer-profiles/customer-profiles.module';
 import { SuppliesModule } from './supplies/supplies.module';
 import { SupplyOrdersModule } from './supply-orders/supply-orders.module';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { SupplyOrdersModule } from './supply-orders/supply-orders.module';
     CustomerProfilesModule,
     SuppliesModule,
     SupplyOrdersModule,
+    PlatformSettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
