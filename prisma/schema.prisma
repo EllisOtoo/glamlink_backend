@@ -476,6 +476,7 @@ model SupplyProduct {
   unit             String?
   leadTimeDays     Int?
   mediaUrl         String?
+  mediaStorageKey  String?
   attributes       Json?
   isActive         Boolean         @default(true)
   inStock          Boolean         @default(true)

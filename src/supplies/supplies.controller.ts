@@ -21,6 +21,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 import { CatalogQueryDto } from './dto/catalog-query.dto';
+import { RequestProductImageUploadDto } from './dto/request-product-image-upload.dto';
 
 @Controller()
 export class AdminSuppliesController {
@@ -72,6 +73,16 @@ export class AdminSuppliesController {
     @Body() dto: UpdateProductDto,
   ) {
     return this.suppliesService.updateProduct(productId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post('admin/supplies/products/:productId/image-upload-url')
+  requestProductImageUploadUrl(
+    @Param('productId') productId: string,
+    @Body() dto: RequestProductImageUploadDto,
+  ) {
+    return this.suppliesService.requestProductImageUploadUrl(productId, dto);
   }
 }
 

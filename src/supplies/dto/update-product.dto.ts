@@ -49,6 +49,10 @@ export class UpdateProductDto {
   mediaUrl?: string;
 
   @IsOptional()
+  @IsString()
+  mediaStorageKey?: string;
+
+  @IsOptional()
   attributes?: Prisma.InputJsonValue;
 
   @IsOptional()

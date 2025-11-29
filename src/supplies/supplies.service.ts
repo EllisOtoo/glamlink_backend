@@ -12,6 +12,8 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 import { CatalogQueryDto } from './dto/catalog-query.dto';
+import { RequestProductImageUploadDto } from './dto/request-product-image-upload.dto';
+import { StorageService } from '../storage/storage.service';
 
 const productInclude: Prisma.SupplyProductInclude = {
   supplier: true,
@@ -36,7 +38,10 @@ export class SuppliesService {
       .filter(Boolean),
   );
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async listSuppliers() {
     return this.prisma.supplySupplier.findMany({
@@ -110,6 +115,7 @@ export class SuppliesService {
         unit: dto.unit?.trim(),
         leadTimeDays: dto.leadTimeDays ?? null,
         mediaUrl: dto.mediaUrl,
+        mediaStorageKey: dto.mediaStorageKey,
         attributes: dto.attributes ?? undefined,
         isActive: dto.isActive ?? true,
         inStock,
@@ -158,6 +164,7 @@ export class SuppliesService {
         unit: dto.unit?.trim(),
         leadTimeDays: dto.leadTimeDays ?? undefined,
         mediaUrl: dto.mediaUrl ?? undefined,
+        mediaStorageKey: dto.mediaStorageKey ?? undefined,
         attributes: dto.attributes ?? undefined,
         isActive:
           typeof dto.isActive === 'boolean' ? dto.isActive : undefined,
@@ -189,6 +196,31 @@ export class SuppliesService {
       throw new NotFoundException('Product not found after update.');
     }
     return this.toAdminView(updated);
+  }
+
+  async requestProductImageUploadUrl(
+    productId: string,
+    dto: RequestProductImageUploadDto,
+  ) {
+    const product = await this.prisma.supplyProduct.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found.');
+    }
+
+    const extension =
+      dto.mimeType.split('/').pop()?.toLowerCase() ?? 'jpg';
+    const key = `supplies/products/${productId}/${Date.now()}.${extension}`;
+
+    return this.storage.createPresignedUpload({
+      key,
+      contentType: dto.mimeType,
+      metadata: {
+        productId,
+        purpose: 'supply_product_image',
+      },
+    });
   }
 
   async listCatalogForVendor(

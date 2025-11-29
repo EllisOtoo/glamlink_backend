@@ -6,9 +6,10 @@ import {
   AdminSuppliesController,
   VendorSuppliesController,
 } from './supplies.controller';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, StorageModule],
   controllers: [AdminSuppliesController, VendorSuppliesController],
   providers: [SuppliesService],
   exports: [SuppliesService],
