@@ -751,7 +751,8 @@ export class BookingsService {
 
     const now = new Date();
     const startOfDay = new Date(now);
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    // Use local day boundary so vendors see expected day window
+    startOfDay.setHours(0, 0, 0, 0);
 
     const candidates = await this.prisma.booking.findMany({
       where: {
