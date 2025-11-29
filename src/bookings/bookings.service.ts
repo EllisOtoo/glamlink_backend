@@ -676,6 +676,117 @@ export class BookingsService {
     return updated;
   }
 
+  async markBookingCompleted(user: User, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { vendor: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    this.assertBookingOwnership(user, booking);
+
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'Only confirmed bookings can be marked completed.',
+      );
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: BookingStatus.COMPLETED,
+        completedAt: new Date(),
+      },
+    });
+
+    await this.calendarService.syncEntriesForBooking(updated);
+    this.bookingEvents.emitConfirmed(updated, { markedCompleteManually: true });
+
+    return updated;
+  }
+
+  async markBookingNoShow(user: User, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { vendor: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    this.assertBookingOwnership(user, booking);
+
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'Only confirmed bookings can be marked as no-show.',
+      );
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        status: BookingStatus.NO_SHOW,
+        completedAt: null,
+      },
+    });
+
+    await this.calendarService.syncEntriesForBooking(updated);
+    this.bookingEvents.emitCancelled(updated, { markedNoShow: true });
+
+    return updated;
+  }
+
+  async completePastBookingsForToday(vendorUserId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId: vendorUserId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const candidates = await this.prisma.booking.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: BookingStatus.CONFIRMED,
+        scheduledEnd: { lt: now, gte: startOfDay },
+      },
+    });
+
+    if (candidates.length === 0) {
+      return { completed: 0 };
+    }
+
+    const updates = await Promise.all(
+      candidates.map((booking) =>
+        this.prisma.booking.update({
+          where: { id: booking.id },
+          data: {
+            status: BookingStatus.COMPLETED,
+            completedAt: new Date(),
+          },
+        }),
+      ),
+    );
+
+    await this.calendarService.syncEntriesForBookings(updates);
+    updates.forEach((booking) =>
+      this.bookingEvents.emitConfirmed(booking, {
+        bulkComplete: true,
+      }),
+    );
+
+    return { completed: updates.length };
+  }
+
   async markManualBookingPaid(user: User, bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },

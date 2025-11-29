@@ -83,6 +83,33 @@ export class BookingsController {
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
+  @Post('vendors/me/bookings/:bookingId/complete')
+  async markBookingComplete(
+    @CurrentUser() user: User,
+    @Param('bookingId') bookingId: string,
+  ) {
+    return this.bookingsService.markBookingCompleted(user, bookingId);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/bookings/:bookingId/no-show')
+  async markBookingNoShow(
+    @CurrentUser() user: User,
+    @Param('bookingId') bookingId: string,
+  ) {
+    return this.bookingsService.markBookingNoShow(user, bookingId);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/bookings/complete-past-today')
+  async completePastBookingsForToday(@CurrentUser() user: User) {
+    return this.bookingsService.completePastBookingsForToday(user.id);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
   @Post('vendors/me/bookings/manual')
   async createManualBooking(
     @CurrentUser() user: User,
