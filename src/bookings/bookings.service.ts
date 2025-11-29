@@ -8,6 +8,7 @@ import type { CustomerProfile, Prisma, User } from '@prisma/client';
 import {
   Booking,
   BookingCancelActor,
+  BookingSource,
   BookingStatus,
   PaymentIntent,
   PaymentProvider,
@@ -21,6 +22,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
 import { ServicesService } from '../services/services.service';
 import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
+import { CreateManualBookingDto } from './dto/create-manual-booking.dto';
 import { BookingEventsService } from '../events/booking-events.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { CustomerProfilesService } from '../customer-profiles/customer-profiles.service';
@@ -45,6 +47,7 @@ type BookingWithCustomerProfile = Booking & {
     email: string;
     customerProfile: CustomerProfile | null;
   } | null;
+  vendor?: Vendor;
 };
 
 @Injectable()
@@ -61,6 +64,45 @@ export class BookingsService {
     dto: CreatePublicBookingDto,
     customerUserId?: string | null,
   ): Promise<Booking & { paymentIntent: PaymentIntent | null }> {
+    return this.createBookingWithOptions({
+      dto,
+      customerUserId: customerUserId ?? null,
+      source: BookingSource.ONLINE,
+      createdByUserId: null,
+      collectDeposit: true,
+    });
+  }
+
+  async createManualBooking(
+    userId: string,
+    dto: CreateManualBookingDto,
+  ): Promise<Booking & { paymentIntent: PaymentIntent | null }> {
+    return this.createBookingWithOptions({
+      dto,
+      customerUserId: null,
+      source: BookingSource.MANUAL,
+      createdByUserId: userId,
+      collectDeposit: dto.collectDeposit ?? false,
+      requireVendorOwnershipUserId: userId,
+    });
+  }
+
+  private async createBookingWithOptions(params: {
+    dto: CreatePublicBookingDto;
+    customerUserId: string | null;
+    source: BookingSource;
+    createdByUserId: string | null;
+    collectDeposit: boolean;
+    requireVendorOwnershipUserId?: string;
+  }): Promise<Booking & { paymentIntent: PaymentIntent | null }> {
+    const {
+      dto,
+      customerUserId,
+      source,
+      createdByUserId,
+      collectDeposit,
+      requireVendorOwnershipUserId,
+    } = params;
     const start = new Date(dto.startAt);
     if (Number.isNaN(start.getTime())) {
       throw new BadRequestException('Invalid booking start time.');
@@ -68,6 +110,14 @@ export class BookingsService {
     const startIso = start.toISOString();
 
     const { service, vendor } = await this.findServiceAndVendor(dto.serviceId);
+    if (
+      requireVendorOwnershipUserId &&
+      vendor.userId !== requireVendorOwnershipUserId
+    ) {
+      throw new ForbiddenException(
+        'You cannot create bookings for this service.',
+      );
+    }
     const slot = await this.ensureSlotIsAvailable(vendor, service, startIso);
     const scheduledEnd = new Date(slot.endAt);
     if (Number.isNaN(scheduledEnd.getTime())) {
@@ -85,7 +135,12 @@ export class BookingsService {
 
     const price = this.assertPositiveInt(service.priceCents);
     const depositPercent = this.resolveDepositPercent(service.depositPercent);
-    const deposit = Math.min(price, Math.floor((price * depositPercent) / 100));
+    const calculatedDeposit = Math.min(
+      price,
+      Math.floor((price * depositPercent) / 100),
+    );
+    const shouldCollectDeposit = collectDeposit && calculatedDeposit > 0;
+    const deposit = shouldCollectDeposit ? calculatedDeposit : 0;
     const balance = price - deposit;
 
     const trimmedName = dto.customerName.trim();
@@ -127,6 +182,7 @@ export class BookingsService {
           customerName: trimmedName,
           customerEmail,
           customerPhone,
+          source,
           status:
             deposit > 0
               ? BookingStatus.AWAITING_PAYMENT
@@ -139,6 +195,7 @@ export class BookingsService {
           notes: dto.notes?.trim() ?? null,
           seatId: seatAssignment.seatId,
           staffId: seatAssignment.staffId,
+          createdByUserId,
         },
       });
 
@@ -156,6 +213,8 @@ export class BookingsService {
               vendorId: vendor.id,
               serviceId: service.id,
               customerEmail,
+              source,
+              createdByUserId,
             } as Prisma.InputJsonValue,
           },
         });
@@ -225,6 +284,181 @@ export class BookingsService {
     });
 
     return bookings.map((booking) => this.withPublicCustomerProfile(booking));
+  }
+
+  async getBookingForUser(user: User, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        vendor: true,
+        service: {
+          select: {
+            id: true,
+            name: true,
+            durationMinutes: true,
+          },
+        },
+        customer: {
+          select: {
+            email: true,
+            customerProfile: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    this.assertBookingOwnership(user, booking);
+    return this.withPublicCustomerProfile(booking);
+  }
+
+  async listVendorBookings(
+    userId: string,
+    params: {
+      status?: BookingStatus;
+      take?: number;
+      skip?: number;
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    const take = Math.min(Math.max(params.take ?? 20, 1), 100);
+    const skip = Math.max(params.skip ?? 0, 0);
+
+    const where: Prisma.BookingWhereInput = {
+      vendorId: vendor.id,
+    };
+
+    if (params.status) {
+      if (!Object.values(BookingStatus).includes(params.status)) {
+        throw new BadRequestException('Invalid booking status filter.');
+      }
+      where.status = params.status;
+    }
+
+    const scheduledStart: Prisma.DateTimeFilter = {};
+    if (params.startDate) {
+      const parsed = new Date(params.startDate);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('Invalid startDate filter.');
+      }
+      scheduledStart.gte = parsed;
+    }
+    if (params.endDate) {
+      const parsed = new Date(params.endDate);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('Invalid endDate filter.');
+      }
+      scheduledStart.lte = parsed;
+    }
+
+    if (Object.keys(scheduledStart).length > 0) {
+      where.scheduledStart = scheduledStart;
+    }
+
+    const bookings = await this.prisma.booking.findMany({
+      where,
+      include: {
+        service: {
+          select: {
+            id: true,
+            name: true,
+            durationMinutes: true,
+          },
+        },
+        customer: {
+          select: {
+            email: true,
+            customerProfile: true,
+          },
+        },
+      },
+      orderBy: { scheduledStart: 'desc' },
+      take,
+      skip,
+    });
+
+    return bookings.map((booking) => this.withPublicCustomerProfile(booking));
+  }
+
+  async getVendorBookingStats(
+    userId: string,
+    params: { startDate?: string; endDate?: string },
+  ) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (params.startDate) {
+      const parsed = new Date(params.startDate);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('Invalid startDate filter.');
+      }
+      dateFilter.gte = parsed;
+    }
+    if (params.endDate) {
+      const parsed = new Date(params.endDate);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('Invalid endDate filter.');
+      }
+      dateFilter.lte = parsed;
+    }
+
+    const where: Prisma.BookingWhereInput = {
+      vendorId: vendor.id,
+      scheduledStart:
+        Object.keys(dateFilter).length > 0 ? dateFilter : undefined,
+    };
+
+    const grouped = await this.prisma.booking.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    });
+
+    const completedTotals = await this.prisma.booking.aggregate({
+      _sum: {
+        pricePesewas: true,
+      },
+      where: {
+        ...where,
+        status: BookingStatus.COMPLETED,
+      },
+    });
+
+    const counts: Record<BookingStatus, number> = {
+      [BookingStatus.PENDING]: 0,
+      [BookingStatus.AWAITING_PAYMENT]: 0,
+      [BookingStatus.CONFIRMED]: 0,
+      [BookingStatus.COMPLETED]: 0,
+      [BookingStatus.CANCELLED]: 0,
+      [BookingStatus.NO_SHOW]: 0,
+    };
+
+    grouped.forEach((row) => {
+      counts[row.status] = row._count._all;
+    });
+
+    return {
+      counts,
+      completedSalesPesewas: completedTotals._sum.pricePesewas ?? 0,
+    };
   }
 
   async listCustomerUpcomingBookings(userId: string, take = 10) {
@@ -432,6 +666,61 @@ export class BookingsService {
     await this.calendarService.syncEntriesForBooking(updated);
     this.bookingEvents.emitCancelled(updated, { reason: cancellationReason });
 
+    return updated;
+  }
+
+  async markManualBookingPaid(user: User, bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        vendor: true,
+        paymentIntent: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    if (booking.vendor.userId !== user.id) {
+      throw new ForbiddenException('You cannot manage this booking.');
+    }
+
+    if (booking.source !== BookingSource.MANUAL) {
+      throw new BadRequestException(
+        'Only manual bookings can be marked paid here.',
+      );
+    }
+
+    if (booking.status !== BookingStatus.AWAITING_PAYMENT) {
+      throw new BadRequestException(
+        'Only awaiting payment bookings can be marked paid.',
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (booking.paymentIntent) {
+        await tx.paymentIntent.update({
+          where: { id: booking.paymentIntent.id },
+          data: {
+            status: PaymentStatus.SUCCEEDED,
+            confirmedAt: new Date(),
+          },
+        });
+      }
+
+      return tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.CONFIRMED,
+          paidAt: new Date(),
+          balancePesewas: 0,
+        },
+      });
+    });
+
+    await this.calendarService.syncEntriesForBooking(updated);
+    this.bookingEvents.emitConfirmed(updated, { markedPaidManually: true });
     return updated;
   }
 
