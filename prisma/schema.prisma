@@ -41,6 +41,7 @@ model Vendor {
   calendarEntries       BookingCalendarEntry[]
   reviews               Review[]
   supplyOrders          SupplyOrder[]
+  giftCards             GiftCard[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -249,6 +250,7 @@ model Booking {
   updatedAt          DateTime               @updatedAt
   calendarEntries    BookingCalendarEntry[]
   review             Review?
+  giftCardRedemptions GiftCardRedemption[]
 
   @@index([vendorId, scheduledStart])
   @@index([vendorId, status])
@@ -274,6 +276,8 @@ model PaymentIntent {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   supplyOrder   SupplyOrder?
+  giftCardId    String?         @unique
+  giftCard      GiftCard?       @relation("GiftCardPaymentIntent", fields: [giftCardId], references: [id], onDelete: SetNull)
 }
 
 enum BookingStatus {
@@ -301,6 +305,57 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   CANCELED
+}
+
+model GiftCard {
+  id               String                @id @default(cuid())
+  code             String                @unique
+  vendorId         String
+  vendor           Vendor                @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  valuePesewas     Int
+  balancePesewas   Int
+  currency         String                @default("GHS")
+  purchaserName    String
+  purchaserEmail   String
+  purchaserPhone   String?
+  recipientName    String?
+  recipientEmail   String?
+  message          String?
+  status           GiftCardStatus        @default(PENDING_PAYMENT)
+  expiresAt        DateTime?
+  activatedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  redemptions      GiftCardRedemption[]
+  paymentIntent    PaymentIntent?        @relation("GiftCardPaymentIntent")
+
+  @@index([vendorId])
+  @@index([status])
+  @@index([code])
+}
+
+model GiftCardRedemption {
+  id                     String     @id @default(cuid())
+  giftCardId             String
+  giftCard               GiftCard   @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  bookingId              String?
+  booking                Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  amountPesewas          Int
+  depositAmountPesewas   Int        @default(0)
+  balanceAmountPesewas   Int        @default(0)
+  createdAt              DateTime   @default(now())
+  refundedAt             DateTime?
+
+  @@index([giftCardId])
+  @@index([bookingId])
+}
+
+enum GiftCardStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  DEPLETED
+  CANCELLED
+  EXPIRED
 }
 
 model BookingCalendarEntry {

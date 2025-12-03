@@ -28,4 +28,8 @@ export class CreatePublicBookingDto {
   @IsOptional()
   @IsString()
   seatId?: string;
+
+  @IsOptional()
+  @IsString()
+  giftCardCode?: string;
 }

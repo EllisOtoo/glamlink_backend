@@ -82,3 +82,9 @@ Run `pnpm prisma:migrate` after bringing up Postgres to create the initial schem
 - Flesh out Prisma models for services, bookings, reviews, and payments.
 - Implement vendor onboarding flows and REST modules that map to the PRD.
 - Add health checks and CI automation for migrations/tests.
+
+## Gift Cards
+
+- Purchase: `POST /public/gift-cards` with `vendorId`, `amountPesewas`, purchaser + optional recipient details; returns a Paystack checkout payload. Card activates after Paystack success and emails the recipient/purchaser.
+- Lookup: `GET /public/gift-cards/:code?email=<recipient-or-purchaser-email>` to view balance/status.
+- Booking: `giftCardCode` is supported on public/manual booking creation. The card applies to the deposit first, then any remaining balance. If it covers the deposit fully, the booking is auto-confirmed; unused balances stay on the card. Cancelled bookings auto-refund any gift card redemptions.

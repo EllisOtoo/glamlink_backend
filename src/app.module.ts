@@ -17,6 +17,7 @@ import { CustomerProfilesModule } from './customer-profiles/customer-profiles.mo
 import { SuppliesModule } from './supplies/supplies.module';
 import { SupplyOrdersModule } from './supply-orders/supply-orders.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { GiftCardsModule } from './gift-cards/gift-cards.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PlatformSettingsModule } from './platform-settings/platform-settings.mo
     SuppliesModule,
     SupplyOrdersModule,
     PlatformSettingsModule,
+    GiftCardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

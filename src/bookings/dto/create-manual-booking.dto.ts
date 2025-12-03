@@ -32,4 +32,8 @@ export class CreateManualBookingDto {
   @IsOptional()
   @IsBoolean()
   collectDeposit?: boolean;
+
+  @IsOptional()
+  @IsString()
+  giftCardCode?: string;
 }

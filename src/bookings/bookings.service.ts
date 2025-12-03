@@ -29,6 +29,10 @@ import { CustomerProfilesService } from '../customer-profiles/customer-profiles.
 import { RescheduleBookingDto } from './dto/reschedule-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import {
+  GiftCardApplicationResult,
+  GiftCardsService,
+} from '../gift-cards/gift-cards.service';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -60,6 +64,7 @@ export class BookingsService {
     private readonly calendarService: CalendarService,
     private readonly customerProfiles: CustomerProfilesService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly giftCards: GiftCardsService,
   ) {}
 
   async createPublicBooking(
@@ -149,6 +154,8 @@ export class BookingsService {
     const shouldCollectDeposit = collectDeposit && calculatedDeposit > 0;
     const deposit = shouldCollectDeposit ? calculatedDeposit : 0;
     const balance = price - deposit;
+    const giftCardCode = this.normalizeNullable(dto.giftCardCode ?? null);
+    const currency = 'GHS';
 
     const trimmedName = dto.customerName.trim();
     if (trimmedName.length === 0) {
@@ -180,7 +187,7 @@ export class BookingsService {
         await this.assertNoOverlap(tx, vendor.id, start, scheduledEnd);
       }
 
-      const created = await tx.booking.create({
+      let created = await tx.booking.create({
         data: {
           reference,
           vendorId: vendor.id,
@@ -206,15 +213,49 @@ export class BookingsService {
         },
       });
 
-      if (deposit > 0) {
+      let remainingDeposit = deposit;
+      let remainingBalance = balance;
+      let giftCardApplication: GiftCardApplicationResult | null = null;
+
+      if (giftCardCode) {
+        giftCardApplication = await this.giftCards.applyGiftCardToBooking(tx, {
+          vendorId: vendor.id,
+          currency,
+          giftCardCode,
+          depositDue: deposit,
+          balanceDue: balance,
+          bookingId: created.id,
+        });
+
+        remainingDeposit = giftCardApplication.remainingDeposit;
+        remainingBalance = giftCardApplication.remainingBalance;
+
+        created = await tx.booking.update({
+          where: { id: created.id },
+          data: {
+            depositPesewas: remainingDeposit,
+            balancePesewas: remainingBalance,
+            status:
+              remainingDeposit > 0
+                ? BookingStatus.AWAITING_PAYMENT
+                : BookingStatus.CONFIRMED,
+            paidAt:
+              remainingDeposit === 0 && remainingBalance === 0
+                ? new Date()
+                : created.paidAt,
+          },
+        });
+      }
+
+      if (remainingDeposit > 0) {
         await tx.paymentIntent.create({
           data: {
             bookingId: created.id,
             provider: PaymentProvider.PAYSTACK,
             providerRef: reference,
-            amountPesewas: deposit,
+            amountPesewas: remainingDeposit,
             status: PaymentStatus.REQUIRES_PAYMENT_METHOD,
-            currency: 'GHS',
+            currency,
             metadata: {
               bookingId: created.id,
               vendorId: vendor.id,
@@ -222,6 +263,7 @@ export class BookingsService {
               customerEmail,
               source,
               createdByUserId,
+              giftCardId: giftCardApplication?.giftCardId ?? null,
             } as Prisma.InputJsonValue,
           },
         });
@@ -660,14 +702,19 @@ export class BookingsService {
     const cancellationReason =
       dto.reason && dto.reason.trim().length > 0 ? dto.reason.trim() : null;
 
-    const updated = await this.prisma.booking.update({
-      where: { id: booking.id },
-      data: {
-        status: BookingStatus.CANCELLED,
-        cancelledAt: new Date(),
-        cancelledBy: actor,
-        cancellationReason,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          cancelledBy: actor,
+          cancellationReason,
+        },
+      });
+
+      await this.giftCards.refundGiftCardRedemptionsForBooking(tx, booking.id);
+      return cancelled;
     });
 
     await this.calendarService.syncEntriesForBooking(updated);

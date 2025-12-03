@@ -8,6 +8,7 @@ import {
   Booking,
   SupplyOrderStatus,
   PaymentIntent,
+  GiftCardStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { BookingEventsService } from '../events/booking-events.service';
@@ -41,6 +42,7 @@ export interface PaystackWebhookEvent {
 const paymentIntentInclude = {
   booking: true,
   supplyOrder: true,
+  giftCard: true,
 } satisfies Prisma.PaymentIntentInclude;
 
 type PaymentIntentWithRelations = Prisma.PaymentIntentGetPayload<{
@@ -163,6 +165,7 @@ export class PaystackService {
     let confirmedBooking: Booking | null = null;
     let failedBooking: { booking: Booking; reason: string } | null = null;
     let supplyOrderId: string | null = null;
+    let activatedGiftCardId: string | null = null;
     await this.prisma.$transaction(async (tx) => {
       let paymentIntent = await this.findPaymentIntentForEvent(tx, data);
 
@@ -265,6 +268,21 @@ export class PaystackService {
           },
         });
         supplyOrderId = paymentIntent.supplyOrder.id;
+      } else if (paymentIntent.giftCard) {
+        const existingBalance = paymentIntent.giftCard.balancePesewas;
+        await tx.giftCard.update({
+          where: { id: paymentIntent.giftCard.id },
+          data: {
+            status: GiftCardStatus.ACTIVE,
+            activatedAt:
+              paymentIntent.giftCard.activatedAt ?? new Date(),
+            balancePesewas:
+              existingBalance > 0
+                ? existingBalance
+                : paymentIntent.giftCard.valuePesewas,
+          },
+        });
+        activatedGiftCardId = paymentIntent.giftCard.id;
       }
     });
 
@@ -308,6 +326,33 @@ export class PaystackService {
         });
       }
     }
+
+    if (activatedGiftCardId) {
+      this.logger.log(
+        `Gift card ${activatedGiftCardId} activated for reference ${data.reference}.`,
+      );
+      const giftCard = await this.prisma.giftCard.findUnique({
+        where: { id: activatedGiftCardId },
+        include: {
+          vendor: {
+            select: { businessName: true },
+          },
+        },
+      });
+      if (giftCard) {
+        await this.notifications.notifyGiftCardActivated({
+          giftCardId: giftCard.id,
+          code: giftCard.code,
+          amountPesewas: giftCard.valuePesewas,
+          currency: giftCard.currency,
+          purchaserEmail: giftCard.purchaserEmail,
+          purchaserName: giftCard.purchaserName,
+          recipientEmail: giftCard.recipientEmail,
+          recipientName: giftCard.recipientName,
+          vendorName: giftCard.vendor?.businessName ?? null,
+        });
+      }
+    }
   }
 
   private async handleChargeFailure(
@@ -321,6 +366,7 @@ export class PaystackService {
 
     let affectedBooking: Booking | null = null;
     let affectedSupplyOrderId: string | null = null;
+    let affectedGiftCardId: string | null = null;
     const failureReason = `Paystack reported ${payload.event}`;
     await this.prisma.$transaction(async (tx) => {
       let paymentIntent = await this.findPaymentIntentForEvent(tx, data);
@@ -357,6 +403,9 @@ export class PaystackService {
       if (result?.supplyOrderId) {
         affectedSupplyOrderId = result.supplyOrderId;
       }
+      if (result?.giftCardId) {
+        affectedGiftCardId = result.giftCardId;
+      }
     });
 
     if (affectedBooking) {
@@ -372,13 +421,23 @@ export class PaystackService {
         `Supply order ${affectedSupplyOrderId} marked as failed for reference ${data.reference}`,
       );
     }
+
+    if (affectedGiftCardId) {
+      this.logger.warn(
+        `Gift card ${affectedGiftCardId} marked as cancelled for reference ${data.reference}`,
+      );
+    }
   }
 
   private async markIntentFailure(
     tx: Prisma.TransactionClient,
     paymentIntent: PaymentIntentWithRelations,
     reason: string,
-  ): Promise<{ booking: Booking | null; supplyOrderId?: string } | null> {
+  ): Promise<{
+    booking: Booking | null;
+    supplyOrderId?: string;
+    giftCardId?: string;
+  } | null> {
     await tx.paymentIntent.update({
       where: { id: paymentIntent.id },
       data: {
@@ -420,6 +479,20 @@ export class PaystackService {
         },
       });
       return { booking: null, supplyOrderId: paymentIntent.supplyOrder.id };
+    }
+
+    if (
+      paymentIntent.giftCard &&
+      paymentIntent.giftCard.status === GiftCardStatus.PENDING_PAYMENT
+    ) {
+      await tx.giftCard.update({
+        where: { id: paymentIntent.giftCard.id },
+        data: {
+          status: GiftCardStatus.CANCELLED,
+          balancePesewas: 0,
+        },
+      });
+      return { booking: paymentIntent.booking ?? null, giftCardId: paymentIntent.giftCard.id };
     }
 
     return { booking: paymentIntent.booking ?? null };
@@ -469,6 +542,8 @@ export class PaystackService {
         : null;
     const supplyOrderId =
       typeof metadata.orderId === 'string' ? metadata.orderId : null;
+    const giftCardId =
+      typeof metadata.giftCardId === 'string' ? metadata.giftCardId : null;
 
     if (reference) {
       const byRef = await tx.paymentIntent.findUnique({
@@ -487,6 +562,16 @@ export class PaystackService {
       });
       if (byId) {
         return byId;
+      }
+    }
+
+    if (giftCardId) {
+      const byGiftCard = await tx.paymentIntent.findUnique({
+        where: { giftCardId },
+        include: paymentIntentInclude,
+      });
+      if (byGiftCard) {
+        return byGiftCard;
       }
     }
 

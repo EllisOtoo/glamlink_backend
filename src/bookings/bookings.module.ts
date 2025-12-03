@@ -11,6 +11,7 @@ import { PublicBookingsController } from './public-bookings.controller';
 import { BookingsController } from './bookings.controller';
 import { BookingRemindersService } from './reminders.service';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
+import { GiftCardsModule } from '../gift-cards/gift-cards.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PlatformSettingsModule } from '../platform-settings/platform-settings.m
     CalendarModule,
     CustomerProfilesModule,
     PlatformSettingsModule,
+    GiftCardsModule,
   ],
   controllers: [PublicBookingsController, BookingsController],
   providers: [BookingsService, BookingRemindersService],

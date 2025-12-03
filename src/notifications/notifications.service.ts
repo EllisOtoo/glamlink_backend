@@ -283,6 +283,54 @@ export class NotificationsService {
     });
   }
 
+  async notifyGiftCardActivated(payload: {
+    giftCardId: string;
+    code: string;
+    amountPesewas: number;
+    currency: string;
+    purchaserEmail: string;
+    purchaserName: string;
+    recipientEmail?: string | null;
+    recipientName?: string | null;
+    vendorName?: string | null;
+  }) {
+    const recipients = [
+      payload.recipientEmail?.toLowerCase(),
+      payload.purchaserEmail?.toLowerCase(),
+    ].filter((value): value is string => !!value);
+
+    if (recipients.length === 0) {
+      this.logger.warn(
+        `Gift card ${payload.giftCardId} activated but no email recipients found.`,
+      );
+      return;
+    }
+
+    const amount = this.formatCurrency(
+      payload.amountPesewas,
+      payload.currency,
+    );
+    const vendor = payload.vendorName ?? 'your GlamLink vendor';
+    const subject = 'Your GlamLink gift card is ready';
+    const lines = [
+      `Hello ${payload.recipientName ?? 'there'},`,
+      '',
+      `You have a gift card worth ${amount} for ${vendor}.`,
+      `Code: ${payload.code}`,
+      '',
+      'Use this code when booking to redeem it.',
+      '',
+      'Enjoy!',
+    ];
+
+    await this.sendEmail({
+      to: recipients,
+      subject,
+      text: lines.join('\n'),
+      html: `<p>${lines.join('<br/>')}</p>`,
+    });
+  }
+
   private async sendMessageToUsers(userIds: string[], message: PushMessage) {
     const tokenBatches = await Promise.all(
       userIds.map((userId) => this.getTokensForUser(userId)),
@@ -333,6 +381,14 @@ export class NotificationsService {
       text: lines.join('\n'),
       html: `<p>${lines.join('<br/>')}</p>`,
     });
+  }
+
+  private formatCurrency(amount: number, currency: string) {
+    const normalized = currency.toUpperCase();
+    if (!Number.isFinite(amount)) {
+      return `${normalized} ${amount}`;
+    }
+    return `${normalized} ${(amount / 100).toFixed(2)}`;
   }
 
   private getOpsEmails(): string[] {
