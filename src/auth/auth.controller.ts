@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import type { Request } from 'express';
-import { AuthService } from './auth.service';
+import { AuthService, VendorContext } from './auth.service';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { RequestWithAuth } from './decorators/current-user.decorator';
@@ -42,6 +42,7 @@ export class AuthController {
       role: UserRole;
       lastSignedInAt: Date | null;
     };
+    vendor: ReturnType<AuthController['mapVendor']>;
   }> {
     const authSession = await this.authService.verifyEmailOtp({
       email: body.email,
@@ -62,6 +63,7 @@ export class AuthController {
         role: authSession.user.role,
         lastSignedInAt: authSession.user.lastSignedInAt,
       },
+      vendor: this.mapVendor(authSession.vendor),
     };
   }
 
@@ -78,6 +80,7 @@ export class AuthController {
       role: UserRole;
       lastSignedInAt: Date | null;
     };
+    vendor: ReturnType<AuthController['mapVendor']>;
   }> {
     const authSession = await this.authService.loginWithFirebaseIdToken({
       idToken: body.idToken,
@@ -97,6 +100,7 @@ export class AuthController {
         role: authSession.user.role,
         lastSignedInAt: authSession.user.lastSignedInAt,
       },
+      vendor: this.mapVendor(authSession.vendor),
     };
   }
 
@@ -141,7 +145,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(SessionAuthGuard)
-  getProfile(
+  async getProfile(
     @CurrentUser()
     user: {
       id: string;
@@ -150,7 +154,11 @@ export class AuthController {
       lastSignedInAt: Date | null;
     },
   ) {
-    return user;
+    const vendor = await this.authService.getVendorContextByUserId(user.id);
+    return {
+      ...user,
+      vendor: this.mapVendor(vendor),
+    };
   }
 
   private extractClientIp(request: Request): string | undefined {
@@ -164,5 +172,16 @@ export class AuthController {
     }
 
     return request.ip;
+  }
+
+  private mapVendor(vendor: VendorContext | null) {
+    if (!vendor) {
+      return null;
+    }
+    return {
+      id: vendor.id,
+      handle: vendor.handle,
+      status: vendor.status,
+    };
   }
 }

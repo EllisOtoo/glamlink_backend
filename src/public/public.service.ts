@@ -444,6 +444,41 @@ export class PublicCatalogService {
     }));
   }
 
+  async listServicesForVendor(userId: string): Promise<ServiceSummary[]> {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    const services = await this.prisma.service.findMany({
+      where: { vendorId: vendor.id, isActive: true },
+      orderBy: [{ createdAt: 'desc' }],
+      include: SERVICE_INCLUDE,
+    });
+
+    const reviewAggregates =
+      services.length === 0
+        ? []
+        : await this.prisma.review.groupBy({
+            by: ['vendorId'],
+            where: { vendorId: vendor.id },
+            _avg: { rating: true },
+            _count: { rating: true },
+          });
+
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
+
+    return services.map((service) =>
+      this.mapServiceSummary(service, reviewAggregates, markupBps),
+    );
+  }
+
   private mapServiceSummary(
     service: ServiceWithRelations,
     reviewAggregates: ReviewAggregate[],

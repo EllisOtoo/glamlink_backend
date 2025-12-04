@@ -6,7 +6,13 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, Session, User, UserRole } from '@prisma/client';
+import {
+  Prisma,
+  Session,
+  User,
+  UserRole,
+  VendorStatus,
+} from '@prisma/client';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { randomBytes, randomInt, createHash } from 'node:crypto';
 import { PrismaService } from '../prisma';
@@ -21,11 +27,18 @@ const OTP_MAX_ATTEMPTS = 5;
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 const DEFAULT_JWT_TTL_SECONDS = 60 * 60; // 1 hour
 
+export interface VendorContext {
+  id: string;
+  handle: string | null;
+  status: VendorStatus;
+}
+
 export interface AuthSession {
   token: string;
   expiresAt: Date;
   session: Session;
   user: User;
+  vendor: VendorContext | null;
 }
 
 @Injectable()
@@ -149,6 +162,8 @@ export class AuthService {
         metadata: params.metadata,
       });
 
+      const vendor = await this.findVendorContext(tx, user.id);
+
       if (created) {
         this.logger.log(`Created new user ${user.id} (${user.email})`);
       }
@@ -158,6 +173,7 @@ export class AuthService {
         expiresAt: session.record.expiresAt,
         session: session.record,
         user,
+        vendor,
       };
     });
   }
@@ -278,6 +294,8 @@ export class AuthService {
         metadata: params.metadata,
       });
 
+      const vendor = await this.findVendorContext(tx, user.id);
+
       if (created) {
         this.logger.log(
           `Created new Firebase-backed user ${user.id} (${user.email})`,
@@ -289,6 +307,7 @@ export class AuthService {
         expiresAt: session.record.expiresAt,
         session: session.record,
         user,
+        vendor,
       };
     });
   }
@@ -301,6 +320,7 @@ export class AuthService {
     access_token: string;
     expiresAt: Date;
     user: User;
+    vendor: VendorContext | null;
   }> {
     const decoded = await this.verifyFirebaseIdToken(params.idToken);
     const normalizedEmail = this.normalizeEmail(decoded.email ?? '');
@@ -325,7 +345,8 @@ export class AuthService {
       },
     });
 
-    const jwt = this.buildJwt(user, decoded);
+    const vendor = await this.findVendorContext(this.prisma, user.id);
+    const jwt = this.buildJwt(user, decoded, vendor);
     this.logger.log(`Registered Firebase user ${user.id} (${user.email})`);
     return jwt;
   }
@@ -338,6 +359,7 @@ export class AuthService {
     access_token: string;
     expiresAt: Date;
     user: User;
+    vendor: VendorContext | null;
   }> {
     const decoded = await this.verifyFirebaseIdToken(params.idToken);
 
@@ -354,7 +376,8 @@ export class AuthService {
       data: { lastSignedInAt: new Date() },
     });
 
-    return this.buildJwt(user, decoded);
+    const vendor = await this.findVendorContext(this.prisma, user.id);
+    return this.buildJwt(user, decoded, vendor);
   }
 
   private normalizeEmail(email: string): string {
@@ -404,7 +427,13 @@ export class AuthService {
   private buildJwt(
     user: User,
     decodedToken: DecodedIdToken,
-  ): { access_token: string; expiresAt: Date; user: User } {
+    vendor: VendorContext | null,
+  ): {
+    access_token: string;
+    expiresAt: Date;
+    user: User;
+    vendor: VendorContext | null;
+  } {
     const ttl = this.getJwtTtlSeconds();
     const exp = Math.floor(Date.now() / 1000) + ttl;
     const payload = {
@@ -413,6 +442,9 @@ export class AuthService {
       email: user.email,
       phoneNumber: decodedToken.phone_number ?? null,
       role: user.role,
+      vendorId: vendor?.id ?? null,
+      vendorHandle: vendor?.handle ?? null,
+      vendorStatus: vendor?.status ?? null,
       exp,
     };
 
@@ -421,6 +453,7 @@ export class AuthService {
       access_token: token,
       expiresAt: new Date(exp * 1000),
       user,
+      vendor,
     };
   }
 
@@ -441,6 +474,34 @@ export class AuthService {
       return DEFAULT_JWT_TTL_SECONDS;
     }
     return parsed;
+  }
+
+  async getVendorContextByUserId(userId: string): Promise<VendorContext | null> {
+    return this.findVendorContext(this.prisma, userId);
+  }
+
+  private async findVendorContext(
+    client: Prisma.TransactionClient | PrismaService,
+    userId: string,
+  ): Promise<VendorContext | null> {
+    const vendor = await client.vendor.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        handle: true,
+        status: true,
+      },
+    });
+
+    if (!vendor) {
+      return null;
+    }
+
+    return {
+      id: vendor.id,
+      handle: vendor.handle,
+      status: vendor.status,
+    };
   }
 
   private sanitizeOtpCode(code: string): string {
