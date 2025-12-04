@@ -59,6 +59,15 @@ export class PublicCatalogController {
     return this.catalog.discoverNearbyServices(query);
   }
 
+  @Get('services/me')
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  listMyServices(
+    @CurrentUser() user: RequestWithAuth['auth']['user'],
+  ): Promise<ServiceSummary[]> {
+    return this.catalog.listServicesForVendor(user.id);
+  }
+
   @Get('services/:serviceId')
   serviceById(
     @Param('serviceId') serviceId: string,
@@ -72,14 +81,5 @@ export class PublicCatalogController {
     @Query() query: ServiceAvailabilityQueryDto,
   ): Promise<ServiceAvailabilitySlot[]> {
     return this.catalog.getServiceAvailability(serviceId, query.date);
-  }
-
-  @Get('services/me')
-  @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
-  listMyServices(
-    @CurrentUser() user: RequestWithAuth['auth']['user'],
-  ): Promise<ServiceSummary[]> {
-    return this.catalog.listServicesForVendor(user.id);
   }
 }
