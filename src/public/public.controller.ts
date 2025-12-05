@@ -11,6 +11,7 @@ import {
   ServiceDetailSummary,
   VendorDetailSummary,
   ServiceAvailabilitySlot,
+  ServiceReviewsResponse,
 } from './public.service';
 import { NearbyServicesQueryDto } from './dto/nearby-services.dto';
 import { ServiceAvailabilityQueryDto } from './dto/service-availability.dto';
@@ -19,6 +20,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { RequestWithAuth } from '../auth/decorators/current-user.decorator';
+import { ServiceReviewsQueryDto } from './dto/service-reviews.dto';
 
 @Controller('public/catalog')
 export class PublicCatalogController {
@@ -81,5 +83,13 @@ export class PublicCatalogController {
     @Query() query: ServiceAvailabilityQueryDto,
   ): Promise<ServiceAvailabilitySlot[]> {
     return this.catalog.getServiceAvailability(serviceId, query.date);
+  }
+
+  @Get('services/:serviceId/reviews')
+  serviceReviews(
+    @Param('serviceId') serviceId: string,
+    @Query() query: ServiceReviewsQueryDto,
+  ): Promise<ServiceReviewsResponse> {
+    return this.catalog.getServiceReviews(serviceId, query);
   }
 }

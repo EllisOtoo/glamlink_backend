@@ -7,6 +7,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { User } from '@prisma/client';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { RequestReviewMediaUploadDto } from './dto/request-review-media-upload.dto';
 
 @Controller('bookings')
 export class BookingReviewsController {
@@ -21,5 +22,16 @@ export class BookingReviewsController {
     @Body() dto: CreateReviewDto,
   ) {
     return this.reviewsService.createReview(user, bookingId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER)
+  @Post(':bookingId/review/upload-url')
+  async requestReviewMediaUpload(
+    @CurrentUser() user: User,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: RequestReviewMediaUploadDto,
+  ) {
+    return this.reviewsService.requestReviewMediaUpload(user, bookingId, dto);
   }
 }

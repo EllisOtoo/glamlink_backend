@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsInt,
   IsOptional,
   IsString,
@@ -17,4 +19,10 @@ export class CreateReviewDto {
   @IsString()
   @MaxLength(1000)
   comment?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsString({ each: true })
+  mediaStorageKeys?: string[];
 }

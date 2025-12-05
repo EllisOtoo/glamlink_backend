@@ -10,6 +10,7 @@ import { ServicesService } from '../services/services.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import type { DiscoverServicesQueryDto } from './dto/discover-services.dto';
 import type { NearbyServicesQueryDto } from './dto/nearby-services.dto';
+import type { ServiceReviewsQueryDto } from './dto/service-reviews.dto';
 
 export interface VendorSummary {
   id: string;
@@ -60,6 +61,10 @@ export interface SeatSummary {
 
 export interface ServiceDetailSummary extends ServiceSummary {
   seats: SeatSummary[];
+  ratingAverage: number | null;
+  ratingCount: number;
+  ratingHistogram: number[];
+  previewReviews: ServiceReview[];
 }
 
 export interface VendorDetailSummary extends VendorSummary {
@@ -84,6 +89,32 @@ type ReviewAggregate = {
   _avg: { rating: number | null };
   _count: { rating: number };
 };
+
+export interface ServiceReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  imageUrls: string[];
+  author: {
+    name: string;
+    initials: string;
+  };
+  vendorReply: {
+    message: string;
+    repliedAt: string | null;
+  } | null;
+}
+
+export interface ServiceReviewsResponse {
+  reviews: ServiceReview[];
+  nextCursor: string | null;
+  rating: {
+    average: number | null;
+    count: number;
+    histogram: number[];
+  };
+}
 
 type VendorSummarySource = {
   id: string;
@@ -581,11 +612,7 @@ export class PublicCatalogService {
       throw new BadRequestException('Vendor is not available for booking.');
     }
 
-    const reviewAggregate = await this.prisma.review.aggregate({
-      where: { vendorId: service.vendor.id },
-      _avg: { rating: true },
-      _count: { rating: true },
-    });
+    const ratingSummary = await this.getServiceRatingSummary(service.id);
 
     const markupBps = await this.platformSettings.getServiceMarkupBps();
     const summary = this.mapServiceSummary(
@@ -593,18 +620,25 @@ export class PublicCatalogService {
       [
         {
           vendorId: service.vendor.id,
-          _avg: { rating: reviewAggregate._avg.rating ?? null },
-          _count: { rating: reviewAggregate._count.rating ?? 0 },
+          _avg: { rating: ratingSummary.average ?? null },
+          _count: { rating: ratingSummary.count ?? 0 },
         },
       ],
       markupBps,
     );
 
     const seats = await this.listSeatsForService(service.vendor.id, service.id);
+    const previewReviews = await this.listServiceReviews(service.id, {
+      take: 3,
+    });
 
     return {
       ...summary,
       seats,
+      ratingAverage: ratingSummary.average,
+      ratingCount: ratingSummary.count,
+      ratingHistogram: ratingSummary.histogram,
+      previewReviews,
     };
   }
 
@@ -634,6 +668,142 @@ export class PublicCatalogService {
       startDate: startDate.toISOString().slice(0, 10),
       days: 1,
     });
+  }
+
+  async getServiceReviews(
+    serviceId: string,
+    query: ServiceReviewsQueryDto,
+  ): Promise<ServiceReviewsResponse> {
+    const service = await this.prisma.service.findFirst({
+      where: {
+        id: serviceId,
+        isActive: true,
+        vendor: { status: VendorStatus.VERIFIED },
+      },
+      select: { id: true },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found or inactive.');
+    }
+
+    const ratingSummary = await this.getServiceRatingSummary(service.id);
+    const take = Math.min(Math.max(query.limit ?? 10, 1), 50);
+    const reviews = await this.listServiceReviews(service.id, {
+      take: take + 1,
+      cursor: query.cursor,
+      rating: query.rating,
+      withMedia: query.withMedia,
+    });
+
+    const hasNext = reviews.length > take;
+    const sliced = hasNext ? reviews.slice(0, take) : reviews;
+
+    return {
+      reviews: sliced,
+      nextCursor: hasNext ? reviews[take].id : null,
+      rating: ratingSummary,
+    };
+  }
+
+  private async getServiceRatingSummary(serviceId: string) {
+    const histogram = [0, 0, 0, 0, 0];
+
+    const grouped = await this.prisma.review.groupBy({
+      by: ['rating'],
+      where: { booking: { serviceId } },
+      _count: { rating: true },
+    });
+
+    grouped.forEach((item) => {
+      const index = item.rating - 1;
+      if (index >= 0 && index < histogram.length) {
+        histogram[index] = item._count.rating;
+      }
+    });
+
+    const aggregate = await this.prisma.review.aggregate({
+      where: { booking: { serviceId } },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    return {
+      average: aggregate._avg.rating ?? null,
+      count: aggregate._count.rating ?? 0,
+      histogram,
+    };
+  }
+
+  private async listServiceReviews(
+    serviceId: string,
+    options: { take: number; cursor?: string; rating?: number; withMedia?: boolean },
+  ): Promise<ServiceReview[]> {
+    const reviews = await this.prisma.review.findMany({
+      where: {
+        booking: { serviceId },
+        rating: options.rating ?? undefined,
+        mediaStorageKeys: options.withMedia ? { isEmpty: false } : undefined,
+      },
+      include: {
+        booking: {
+          select: {
+            scheduledStart: true,
+            service: { select: { name: true } },
+          },
+        },
+        customer: {
+          select: {
+            email: true,
+            customerProfile: { select: { fullName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: options.take,
+      cursor: options.cursor ? { id: options.cursor } : undefined,
+      skip: options.cursor ? 1 : undefined,
+    });
+
+    return reviews.map((review) => {
+      const fullName = review.customer.customerProfile?.fullName ?? null;
+      const name = fullName && fullName.trim().length > 0 ? fullName : 'Customer';
+      const initials = this.buildInitials(
+        fullName ?? review.customer.email ?? 'C',
+      );
+
+      return {
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment ?? null,
+        createdAt: review.createdAt.toISOString(),
+        imageUrls: review.mediaStorageKeys.map((key) =>
+          this.storage.buildPublicUrl(key),
+        ),
+        author: {
+          name,
+          initials,
+        },
+        vendorReply: review.reply
+          ? { message: review.reply, repliedAt: review.repliedAt?.toISOString() ?? null }
+          : null,
+      };
+    });
+  }
+
+  private buildInitials(source: string): string {
+    const parts = source
+      .split(' ')
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0);
+
+    if (parts.length === 0) {
+      return 'C';
+    }
+
+    const first = parts[0][0];
+    const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+    return (first + last).toUpperCase();
   }
 
   private mapVendorSummaries(

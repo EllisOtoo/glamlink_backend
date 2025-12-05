@@ -10,12 +10,23 @@ import { BookingStatus, UserRole } from '@prisma/client';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { ReplyReviewDto } from './dto/reply-review.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { StorageService } from '../storage/storage.service';
+import {
+  normalizeMimeType,
+  resolveImageExtension,
+} from '../storage/media.helpers';
+import { randomUUID } from 'crypto';
+import {
+  MAX_REVIEW_MEDIA_PER_REVIEW,
+  MAX_REVIEW_MEDIA_SIZE_BYTES,
+} from './reviews.constants';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly storage: StorageService,
   ) {}
 
   async createReview(user: User, bookingId: string, dto: CreateReviewDto) {
@@ -49,8 +60,21 @@ export class ReviewsService {
       );
     }
 
+    if (
+      dto.mediaStorageKeys &&
+      dto.mediaStorageKeys.length > MAX_REVIEW_MEDIA_PER_REVIEW
+    ) {
+      throw new BadRequestException(
+        `You can attach up to ${MAX_REVIEW_MEDIA_PER_REVIEW} photos per review.`,
+      );
+    }
+
     const trimmedComment =
       dto.comment && dto.comment.trim().length > 0 ? dto.comment.trim() : null;
+    const mediaStorageKeys =
+      dto.mediaStorageKeys && dto.mediaStorageKeys.length > 0
+        ? dto.mediaStorageKeys
+        : [];
 
     const review = await this.prisma.review.create({
       data: {
@@ -59,6 +83,7 @@ export class ReviewsService {
         customerUserId: user.id,
         rating: dto.rating,
         comment: trimmedComment,
+        mediaStorageKeys,
       },
       include: {
         vendor: { select: { businessName: true, userId: true } },
@@ -157,5 +182,76 @@ export class ReviewsService {
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+  }
+
+  async requestReviewMediaUpload(
+    user: User,
+    bookingId: string,
+    params: { mimeType: string; sizeBytes: number },
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        vendor: true,
+        review: true,
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    if (booking.customerUserId !== user.id) {
+      throw new ForbiddenException('Only the booking owner can upload media.');
+    }
+
+    if (booking.status !== BookingStatus.COMPLETED) {
+      throw new BadRequestException(
+        'You can only add photos for completed bookings.',
+      );
+    }
+
+    if (booking.review) {
+      throw new BadRequestException(
+        'A review already exists for this booking.',
+      );
+    }
+
+    this.assertMediaConstraints(params.mimeType, params.sizeBytes);
+    const extension = resolveImageExtension(params.mimeType);
+    if (!extension) {
+      throw new BadRequestException('Unsupported image type for reviews.');
+    }
+
+    const storageKey = `reviews/${booking.id}/${randomUUID()}.${extension}`;
+    return this.storage.createPresignedUpload({
+      key: storageKey,
+      contentType: normalizeMimeType(params.mimeType),
+      metadata: {
+        bookingId: booking.id,
+        vendorId: booking.vendorId,
+        customerUserId: user.id,
+        purpose: 'review_media',
+      },
+    });
+  }
+
+  private assertMediaConstraints(mimeType: string, sizeBytes: number) {
+    const normalizedMime = normalizeMimeType(mimeType);
+    if (!resolveImageExtension(normalizedMime)) {
+      throw new BadRequestException('Only image uploads are supported.');
+    }
+
+    if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+      throw new BadRequestException('File size must be greater than zero.');
+    }
+
+    if (sizeBytes > MAX_REVIEW_MEDIA_SIZE_BYTES) {
+      throw new BadRequestException(
+        `Each photo must be ${Math.floor(
+          MAX_REVIEW_MEDIA_SIZE_BYTES / (1024 * 1024),
+        )}MB or smaller.`,
+      );
+    }
   }
 }

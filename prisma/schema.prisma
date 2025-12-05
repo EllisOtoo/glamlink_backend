@@ -496,6 +496,7 @@ model Review {
   customer       User      @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
   rating         Int
   comment        String?
+  mediaStorageKeys String[] @default([])
   reply          String?
   repliedAt      DateTime?
   createdAt      DateTime  @default(now())

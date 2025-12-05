@@ -1,0 +1,2 @@
+export const MAX_REVIEW_MEDIA_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+export const MAX_REVIEW_MEDIA_PER_REVIEW = 5;
