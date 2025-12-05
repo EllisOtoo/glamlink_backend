@@ -723,6 +723,55 @@ export class BookingsService {
     return updated;
   }
 
+  async cancelPendingBookingWithoutAuth(
+    bookingId: string,
+    dto: CancelBookingDto,
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    if (booking.status === BookingStatus.CANCELLED) {
+      return booking;
+    }
+
+    if (
+      booking.status !== BookingStatus.PENDING &&
+      booking.status !== BookingStatus.AWAITING_PAYMENT
+    ) {
+      throw new ForbiddenException(
+        'Only pending bookings can be cancelled without authentication.',
+      );
+    }
+
+    const cancellationReason =
+      dto.reason && dto.reason.trim().length > 0 ? dto.reason.trim() : null;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.CANCELLED,
+          cancelledAt: new Date(),
+          cancelledBy: BookingCancelActor.CUSTOMER,
+          cancellationReason,
+        },
+      });
+
+      await this.giftCards.refundGiftCardRedemptionsForBooking(tx, booking.id);
+      return cancelled;
+    });
+
+    await this.calendarService.syncEntriesForBooking(updated);
+    this.bookingEvents.emitCancelled(updated, { reason: cancellationReason });
+
+    return updated;
+  }
+
   async markBookingCompleted(user: User, bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },

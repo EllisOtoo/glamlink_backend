@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Param,
   Post,
   Req,
   UnauthorizedException,
@@ -11,6 +12,7 @@ import { CreatePublicBookingDto } from './dto/create-public-booking.dto';
 import { PaystackService } from '../payments/paystack.service';
 import { AuthService } from '../auth/auth.service';
 import type { User } from '@prisma/client';
+import { CancelBookingDto } from './dto/cancel-booking.dto';
 
 @Controller('public/bookings')
 export class PublicBookingsController {
@@ -32,6 +34,17 @@ export class PublicBookingsController {
       booking,
       paystack,
     };
+  }
+
+  @Post(':bookingId/cancel')
+  async cancelPending(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: CancelBookingDto,
+  ) {
+    return this.bookingsService.cancelPendingBookingWithoutAuth(
+      bookingId,
+      dto,
+    );
   }
 
   private async resolveAuthenticatedUser(
