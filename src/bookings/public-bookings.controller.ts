@@ -60,6 +60,12 @@ export class PublicBookingsController {
     }
 
     const token = header.substring(7);
+    // Prefer JWT so newer clients can authenticate without legacy sessions.
+    const jwtResult = await this.authService.validateJwtToken(token);
+    if (jwtResult) {
+      return jwtResult.user;
+    }
+
     const { user } = await this.authService.validateSessionToken(token);
     return user;
   }

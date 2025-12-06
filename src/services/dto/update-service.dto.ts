@@ -22,7 +22,7 @@ export class UpdateServiceDto {
 
   @IsOptional()
   @IsInt()
-  @Min(500)
+  @Min(100)
   priceCents?: number;
 
   @IsOptional()
