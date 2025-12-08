@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsEmail,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -72,4 +73,11 @@ export class UpdateVendorProfileDto {
   @Min(1)
   @Max(200)
   serviceRadiusKm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  onboardingStep?: number;
 }

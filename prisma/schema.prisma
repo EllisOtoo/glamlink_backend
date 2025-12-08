@@ -9,6 +9,7 @@ datasource db {
 
 model Vendor {
   id                    String                 @id @default(cuid())
+  onboardingStep        Int?                   @default(0)
   businessName          String
   handle                String                 @unique
   status                VendorStatus           @default(DRAFT)
