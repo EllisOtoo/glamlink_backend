@@ -22,6 +22,9 @@ export interface VendorSummary {
   ratingAverage: number | null;
   ratingCount: number;
   startingPriceCents: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  serviceRadiusKm: number | null;
 }
 
 export interface ServiceImageSummary {
@@ -124,6 +127,9 @@ type VendorSummarySource = {
   bio: string | null;
   logoStorageKey: string | null;
   logoVersion: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  serviceRadiusKm?: number | null;
   services: { priceCents: number }[];
 };
 
@@ -247,6 +253,9 @@ export class PublicCatalogService {
         bio: true,
         logoStorageKey: true,
         logoVersion: true,
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -287,6 +296,9 @@ export class PublicCatalogService {
         status: true,
         logoStorageKey: true,
         logoVersion: true,
+        latitude: true,
+        longitude: true,
+        serviceRadiusKm: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -847,6 +859,9 @@ export class PublicCatalogService {
       ratingAverage: summary?._avg.rating ?? null,
       ratingCount: summary?._count.rating ?? 0,
       startingPriceCents,
+      latitude: vendor.latitude ?? null,
+      longitude: vendor.longitude ?? null,
+      serviceRadiusKm: vendor.serviceRadiusKm ?? null,
     };
   }
 
