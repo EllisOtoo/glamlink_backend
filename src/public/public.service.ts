@@ -507,7 +507,20 @@ export class PublicCatalogService {
         }
         return true;
       })
-      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .sort((a, b) => {
+        if (query.sortBy === 'rating') {
+          const ratingA =
+            reviewAggregates.find((r) => r.vendorId === a.service.vendor?.id)
+              ?._avg.rating ?? 0;
+          const ratingB =
+            reviewAggregates.find((r) => r.vendorId === b.service.vendor?.id)
+              ?._avg.rating ?? 0;
+          if (ratingA !== ratingB) {
+            return ratingB - ratingA;
+          }
+        }
+        return a.distanceKm - b.distanceKm;
+      })
       .slice(0, 24);
 
     return withDistance.map(({ service, distanceKm }) => ({

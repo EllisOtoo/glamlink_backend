@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class NearbyServicesQueryDto {
   @Transform(({ value }) => Number(value))
@@ -24,4 +24,8 @@ export class NearbyServicesQueryDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  @IsOptional()
+  @IsEnum(['distance', 'rating'])
+  sortBy?: 'distance' | 'rating' = 'distance';
 }
