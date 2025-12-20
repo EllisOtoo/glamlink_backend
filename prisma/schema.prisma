@@ -150,6 +150,8 @@ model Service {
   id              String                 @id @default(cuid())
   vendorId        String
   vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  categoryId      String?
+  category        Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   name            String
   description     String?
   priceCents      Int
@@ -165,6 +167,19 @@ model Service {
   seatLinks       ServiceSeatService[]
 
   @@index([vendorId, isActive])
+  @@index([categoryId])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  icon      String?
+  services  Service[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([slug])
 }
 
 model ServiceImage {

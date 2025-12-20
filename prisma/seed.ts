@@ -263,6 +263,23 @@ const products: ProductSeed[] = [
   },
 ];
 
+const categories = [
+  { name: 'Hair', slug: 'hair', icon: 'Scissors' },
+  { name: 'Nails', slug: 'nails', icon: 'Palette' },
+  { name: 'Makeup', slug: 'makeup', icon: 'Sparkles' },
+  { name: 'Skincare', slug: 'skin', icon: 'Cloud' },
+  { name: 'Massage', slug: 'massage', icon: 'Wind' },
+  { name: 'Bridal', slug: 'bridal', icon: 'Heart' },
+];
+
+async function upsertCategory(seed: { name: string; slug: string; icon: string }) {
+  return prisma.category.upsert({
+    where: { slug: seed.slug },
+    update: { name: seed.name, icon: seed.icon },
+    create: { name: seed.name, slug: seed.slug, icon: seed.icon },
+  });
+}
+
 async function upsertSupplier(seed: SupplierSeed) {
   const existing = await prisma.supplySupplier.findFirst({
     where: { name: seed.name },
@@ -366,6 +383,11 @@ async function main() {
       continue;
     }
     await upsertProduct(product, supplierId);
+  }
+
+  console.log('Seeding categories...');
+  for (const category of categories) {
+    await upsertCategory(category);
   }
 
   const productCount = await prisma.supplyProduct.count();

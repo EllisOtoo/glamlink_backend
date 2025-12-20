@@ -26,6 +26,11 @@ import { ServiceReviewsQueryDto } from './dto/service-reviews.dto';
 export class PublicCatalogController {
   constructor(private readonly catalog: PublicCatalogService) {}
 
+  @Get('categories')
+  listCategories() {
+    return this.catalog.listCategories();
+  }
+
   @Get('vendors/highlights')
   highlightVendors(
     @Query() query: HighlightVendorsQueryDto,

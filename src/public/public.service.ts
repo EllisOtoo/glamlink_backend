@@ -12,6 +12,13 @@ import type { DiscoverServicesQueryDto } from './dto/discover-services.dto';
 import type { NearbyServicesQueryDto } from './dto/nearby-services.dto';
 import type { ServiceReviewsQueryDto } from './dto/service-reviews.dto';
 
+export interface CategorySummary {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+}
+
 export interface VendorSummary {
   id: string;
   businessName: string;
@@ -176,6 +183,18 @@ export class PublicCatalogService {
     private readonly servicesService: ServicesService,
     private readonly platformSettings: PlatformSettingsService,
   ) {}
+
+  async listCategories(): Promise<CategorySummary[]> {
+    return this.prisma.category.findMany({
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        icon: true,
+      },
+    });
+  }
 
   async highlightVendors(limit = 6): Promise<VendorSummary[]> {
     const markupBps = await this.platformSettings.getServiceMarkupBps();
@@ -371,6 +390,10 @@ export class PublicCatalogService {
       where.name = { contains: query.q, mode: 'insensitive' };
     }
 
+    if (query.categoryId) {
+      where.categoryId = query.categoryId;
+    }
+
     const limit = query.limit ?? 12;
 
     const markupBps = await this.platformSettings.getServiceMarkupBps();
@@ -410,15 +433,21 @@ export class PublicCatalogService {
     const radiusKm = query.radiusKm ?? 15;
 
     const markupBps = await this.platformSettings.getServiceMarkupBps();
-    const services = await this.prisma.service.findMany({
-      where: {
-        isActive: true,
-        vendor: {
-          status: VendorStatus.VERIFIED,
-          latitude: { not: null },
-          longitude: { not: null },
-        },
+    const where: Prisma.ServiceWhereInput = {
+      isActive: true,
+      vendor: {
+        status: VendorStatus.VERIFIED,
+        latitude: { not: null },
+        longitude: { not: null },
       },
+    };
+
+    if (query.categoryId) {
+      where.categoryId = query.categoryId;
+    }
+
+    const services = await this.prisma.service.findMany({
+      where,
       take: 200,
       orderBy: [{ updatedAt: 'desc' }],
       include: SERVICE_INCLUDE,

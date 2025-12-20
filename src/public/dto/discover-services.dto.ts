@@ -11,6 +11,10 @@ export class DiscoverServicesQueryDto {
   location?: string;
 
   @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @IsOptional()
   @Transform(({ value }) => Number(value))
   @IsInt()
   @Min(1)

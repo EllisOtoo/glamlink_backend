@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class NearbyServicesQueryDto {
   @Transform(({ value }) => Number(value))
@@ -20,4 +20,8 @@ export class NearbyServicesQueryDto {
   @Min(1)
   @Max(100)
   radiusKm?: number;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
 }

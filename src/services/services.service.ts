@@ -95,6 +95,7 @@ export class ServicesService {
         durationMinutes: dto.durationMinutes,
         bufferMinutes,
         isActive,
+        categoryId: dto.categoryId ? (await this.requireCategory(dto.categoryId)).id : null,
       },
     });
   }
@@ -119,6 +120,7 @@ export class ServicesService {
       durationMinutes?: number;
       bufferMinutes?: number;
       isActive?: boolean;
+      categoryId?: string | null;
     } = {};
 
     if (typeof dto.name === 'string') {
@@ -149,6 +151,10 @@ export class ServicesService {
 
     if (typeof dto.isActive === 'boolean') {
       data.isActive = dto.isActive;
+    }
+
+    if (dto.categoryId !== undefined) {
+      data.categoryId = dto.categoryId ? (await this.requireCategory(dto.categoryId)).id : null;
     }
 
     return this.prisma.service.update({
@@ -684,6 +690,16 @@ export class ServicesService {
       throw new NotFoundException('Service not found.');
     }
     return service;
+  }
+
+  private async requireCategory(categoryId: string) {
+    const category = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category) {
+      throw new BadRequestException('Category not found.');
+    }
+    return category;
   }
 
   private assertDuration(durationMinutes: number) {
