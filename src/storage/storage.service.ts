@@ -48,6 +48,7 @@ export class StorageService {
     });
 
     const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn });
+
     return {
       storageKey: params.key,
       uploadUrl,
