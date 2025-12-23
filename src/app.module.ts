@@ -18,6 +18,7 @@ import { SuppliesModule } from './supplies/supplies.module';
 import { SupplyOrdersModule } from './supply-orders/supply-orders.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { GiftCardsModule } from './gift-cards/gift-cards.module';
+import { PayoutsModule } from './payouts/payouts.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { GiftCardsModule } from './gift-cards/gift-cards.module';
     SupplyOrdersModule,
     PlatformSettingsModule,
     GiftCardsModule,
+    PayoutsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -33,6 +33,7 @@ import {
   GiftCardApplicationResult,
   GiftCardsService,
 } from '../gift-cards/gift-cards.service';
+import { PayoutsService } from '../payouts/payouts.service';
 
 const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
   BookingStatus.PENDING,
@@ -65,6 +66,7 @@ export class BookingsService {
     private readonly customerProfiles: CustomerProfilesService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly giftCards: GiftCardsService,
+    private readonly payoutsService: PayoutsService,
   ) {}
 
   async createPublicBooking(
@@ -801,6 +803,8 @@ export class BookingsService {
     await this.calendarService.syncEntriesForBooking(updated);
     this.bookingEvents.emitConfirmed(updated, { markedCompleteManually: true });
 
+    await this.payoutsService.recordEarning(updated.id);
+
     return updated;
   }
 
@@ -875,10 +879,8 @@ export class BookingsService {
     );
 
     await this.calendarService.syncEntriesForBookings(updates);
-    updates.forEach((booking) =>
-      this.bookingEvents.emitConfirmed(booking, {
-        bulkComplete: true,
-      }),
+    await Promise.all(
+      updates.map((booking) => this.payoutsService.recordEarning(booking.id)),
     );
 
     return { completed: updates.length };

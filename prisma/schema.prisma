@@ -46,6 +46,10 @@ model Vendor {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
+  payoutMethods         VendorPayoutMethod[]
+  walletTransactions    WalletTransaction[]
+  payoutRequests        PayoutRequest[]
+
   @@index([status])
 }
 
@@ -648,4 +652,103 @@ model PlatformSetting {
 
 enum PlatformSettingKey {
   SERVICE_MARKUP_BPS
+}
+
+model VendorPayoutMethod {
+  id              String   @id @default(cuid())
+  vendorId        String
+  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  type            PayoutMethodType @default(BANK_ACCOUNT)
+  
+  // Shared
+  accountName     String
+  currency        String   @default("GHS")
+  isPrimary       Boolean  @default(false)
+
+  // Bank Details
+  accountNumber   String?
+  bankName        String?
+  branchCode      String?
+
+  // Mobile Money Details
+  mobileNetwork   String?  // MTN, VODAFONE, AIRTELTIGO
+  mobileNumber    String?
+
+  // Security
+  isVerified      Boolean  @default(false) 
+  lastVerifiedAt  DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payoutRequests  PayoutRequest[]
+
+  @@index([vendorId])
+}
+
+enum PayoutMethodType {
+  BANK_ACCOUNT
+  MOBILE_MONEY
+}
+
+model WalletTransaction {
+  id              String            @id @default(cuid())
+  vendorId        String
+  vendor          Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  amountPesewas   Int               // Positive for earnings, Negative for payouts/refunds
+  type            TransactionType
+  status          TransactionStatus @default(COMPLETED)
+  
+  // Linking/Audit
+  referenceId     String?           // Booking ID, PayoutRequest ID, etc.
+  description     String
+  
+  balanceAfter    Int?              // Snapshot of balance for easy audit
+
+  createdAt       DateTime          @default(now())
+  availableAt     DateTime          @default(now()) // For clearance period logic
+
+  @@index([vendorId, availableAt])
+}
+
+model PayoutRequest {
+  id              String             @id @default(cuid())
+  vendorId        String
+  vendor          Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  amountPesewas   Int
+  currency        String             @default("GHS")
+  
+  destinationMethod VendorPayoutMethod @relation(fields: [payoutMethodId], references: [id])
+  payoutMethodId  String
+
+  status          PayoutStatus       @default(REQUESTED)
+  note            String?            // Admin note
+  rejectionReason String?
+
+  requestedAt     DateTime           @default(now())
+  processedAt     DateTime?
+
+  @@index([vendorId, status])
+}
+
+enum TransactionType {
+  EARNING          // Booking completion
+  PAYOUT           // Withdrawal
+  REFUND           // Funds returned to customer
+  ADJUSTMENT       // Admin correction
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  PROCESSING
+  PAID
+  REJECTED
+  FAILED
 }
