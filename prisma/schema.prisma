@@ -271,6 +271,7 @@ model Booking {
   calendarEntries    BookingCalendarEntry[]
   review             Review?
   giftCardRedemptions GiftCardRedemption[]
+  walletTransactions  WalletTransaction[]
 
   @@index([vendorId, scheduledStart])
   @@index([vendorId, status])
@@ -700,7 +701,10 @@ model WalletTransaction {
   status          TransactionStatus @default(COMPLETED)
   
   // Linking/Audit
-  referenceId     String?           // Booking ID, PayoutRequest ID, etc.
+  bookingId       String?           
+  booking         Booking?          @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  
+  referenceId     String?           // For payouts, external refs, etc.
   description     String
   
   balanceAfter    Int?              // Snapshot of balance for easy audit

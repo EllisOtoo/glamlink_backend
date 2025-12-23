@@ -18,7 +18,20 @@ import { PrismaService } from '../prisma';
 export class PayoutsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getWalletBalance(vendorId: string) {
+  async getWalletBalance(userId: string) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      return {
+        availableBalancePesewas: 0,
+        pendingBalancePesewas: 0,
+        lifetimeEarningsPesewas: 0,
+      };
+    }
+
+    const vendorId = vendor.id;
     const now = new Date();
 
     // Sum all COMPLETED transactions
@@ -72,18 +85,30 @@ export class PayoutsService {
     };
   }
 
-  async listTransactions(vendorId: string, take = 50, skip = 0) {
+  async listTransactions(userId: string, take = 50, skip = 0) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) return [];
+
     return this.prisma.walletTransaction.findMany({
-      where: { vendorId },
+      where: { vendorId: vendor.id },
       orderBy: { createdAt: 'desc' },
       take,
       skip,
     });
   }
 
-  async listPayoutRequests(vendorId: string, take = 50, skip = 0) {
+  async listPayoutRequests(userId: string, take = 50, skip = 0) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) return [];
+
     return this.prisma.payoutRequest.findMany({
-      where: { vendorId },
+      where: { vendorId: vendor.id },
       include: { destinationMethod: true },
       orderBy: { requestedAt: 'desc' },
       take,
@@ -109,7 +134,7 @@ export class PayoutsService {
     }
 
     // Check balance
-    const balance = await this.getWalletBalance(vendor.id);
+    const balance = await this.getWalletBalance(userId);
     if (balance.availableBalancePesewas < amountPesewas) {
       throw new BadRequestException('Insufficient available balance.');
     }
@@ -191,7 +216,7 @@ export class PayoutsService {
         amountPesewas,
         type: TransactionType.EARNING,
         status: TransactionStatus.COMPLETED,
-        referenceId: booking.id,
+        bookingId: booking.id,
         description: `Earning from booking ${booking.reference}`,
         availableAt,
       },
