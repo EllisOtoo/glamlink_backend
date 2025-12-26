@@ -52,6 +52,7 @@ export class SessionAuthGuard implements CanActivate {
       return header.substring(7);
     }
 
-    return undefined;
+    // Fall back to cookie for web clients
+    return (request as any).cookies?.['access_token'];
   }
 }

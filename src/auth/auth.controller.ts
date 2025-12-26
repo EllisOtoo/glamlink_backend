@@ -5,8 +5,10 @@ import {
   HttpCode,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
 import type { Request } from 'express';
 import { AuthService, VendorContext } from './auth.service';
@@ -33,6 +35,7 @@ export class AuthController {
   async verifyOtp(
     @Body() body: VerifyOtpDto,
     @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{
     token: string;
     expiresAt: Date;
@@ -54,6 +57,8 @@ export class AuthController {
       },
     });
 
+    this.setTokenCookie(response, authSession.token);
+
     return {
       token: authSession.token,
       expiresAt: authSession.expiresAt,
@@ -71,6 +76,7 @@ export class AuthController {
   async firebaseLogin(
     @Body() body: FirebaseLoginDto,
     @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{
     token: string;
     expiresAt: Date;
@@ -91,6 +97,8 @@ export class AuthController {
       },
     });
 
+    this.setTokenCookie(response, authSession.token);
+
     return {
       token: authSession.token,
       expiresAt: authSession.expiresAt,
@@ -108,8 +116,9 @@ export class AuthController {
   async firebaseRegisterJwt(
     @Body() body: FirebaseRegisterDto,
     @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.authService.registerWithFirebaseIdToken({
+    const result = await this.authService.registerWithFirebaseIdToken({
       idToken: body.idToken,
       requestedRole: body.role,
       metadata: {
@@ -117,14 +126,18 @@ export class AuthController {
         clientIp: this.extractClientIp(request),
       },
     });
+
+    this.setTokenCookie(response, result.access_token);
+    return result;
   }
 
   @Post('login')
   async firebaseLoginJwt(
     @Body() body: FirebaseLoginDto,
     @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.authService.loginWithFirebaseJwt({
+    const result = await this.authService.loginWithFirebaseJwt({
       idToken: body.idToken,
       requestedRole: body.role,
       metadata: {
@@ -132,15 +145,22 @@ export class AuthController {
         clientIp: this.extractClientIp(request),
       },
     });
+
+    this.setTokenCookie(response, result.access_token);
+    return result;
   }
 
   @Post('logout')
   @UseGuards(SessionAuthGuard)
   @HttpCode(204)
-  async logout(@Req() request: RequestWithAuth): Promise<void> {
+  async logout(
+    @Req() request: RequestWithAuth,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
     if (request.auth.session?.id) {
       await this.authService.revokeSession(request.auth.session.id);
     }
+    this.clearTokenCookie(response);
   }
 
   @Get('me')
@@ -183,5 +203,21 @@ export class AuthController {
       handle: vendor.handle,
       status: vendor.status,
     };
+  }
+
+  private setTokenCookie(response: Response, token: string) {
+    response.cookie('access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/',
+    });
+  }
+
+  private clearTokenCookie(response: Response) {
+    response.clearCookie('access_token', {
+      path: '/',
+    });
   }
 }

@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -15,6 +16,7 @@ async function bootstrap() {
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     credentials: true,
   });
+  app.use(cookieParser());
   app.use(
     json({
       verify: (req: any, _res, buffer) => {
