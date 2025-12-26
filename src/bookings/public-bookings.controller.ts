@@ -51,22 +51,30 @@ export class PublicBookingsController {
     request: Request,
   ): Promise<User | null> {
     const header = request.headers.authorization;
-    if (!header) {
+    let token: string | undefined;
+
+    if (header?.startsWith('Bearer ')) {
+      token = header.substring(7);
+    } else {
+      // Fall back to cookie for web clients
+      token = (request as any).cookies?.['access_token'];
+    }
+
+    if (!token) {
       return null;
     }
 
-    if (!header.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Invalid Authorization header.');
-    }
-
-    const token = header.substring(7);
     // Prefer JWT so newer clients can authenticate without legacy sessions.
     const jwtResult = await this.authService.validateJwtToken(token);
     if (jwtResult) {
       return jwtResult.user;
     }
 
-    const { user } = await this.authService.validateSessionToken(token);
-    return user;
+    try {
+      const { user } = await this.authService.validateSessionToken(token);
+      return user;
+    } catch (error) {
+      return null;
+    }
   }
 }
