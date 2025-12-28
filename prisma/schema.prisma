@@ -9,84 +9,85 @@ datasource db {
 
 model Vendor {
   id                    String                 @id @default(cuid())
-  onboardingStep        Int?                   @default(0)
   businessName          String
   handle                String                 @unique
-  status                VendorStatus           @default(DRAFT)
-  contactEmail          String?
-  phoneNumber           String?
-  bio                   String?
-  locationArea          String?
-  instagramHandle       String?
-  websiteUrl            String?
-  latitude              Float?
-  longitude             Float?
-  serviceRadiusKm       Int?                  @default(15)
-  logoStorageKey        String?
-  logoVersion           Int                    @default(0)
-  kycSubmittedAt        DateTime?
-  verifiedAt            DateTime?
-  rejectionReason       String?
-  reviewedById          String?
-  userId                String?                @unique
-  user                  User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
-  reviewedBy            User?                  @relation("VendorReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  documents             KycDocument[]
-  statusHistory         VendorStatusHistory[]
-  services              Service[]
-  weeklyHours           WeeklyAvailability[]
-  availabilityOverrides AvailabilityOverride[]
-  staff                 StaffMember[]
-  seats                 ServiceSeat[]
-  bookings              Booking[]
-  calendarEntries       BookingCalendarEntry[]
-  reviews               Review[]
-  supplyOrders          SupplyOrder[]
-  giftCards             GiftCard[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
-
-  payoutMethods         VendorPayoutMethod[]
-  walletTransactions    WalletTransaction[]
+  userId                String?                @unique
+  bio                   String?
+  contactEmail          String?
+  instagramHandle       String?
+  kycSubmittedAt        DateTime?
+  locationArea          String?
+  phoneNumber           String?
+  rejectionReason       String?
+  reviewedById          String?
+  status                VendorStatus           @default(DRAFT)
+  verifiedAt            DateTime?
+  websiteUrl            String?
+  logoStorageKey        String?
+  logoVersion           Int                    @default(0)
+  latitude              Float?
+  longitude             Float?
+  serviceRadiusKm       Int?                   @default(15)
+  onboardingStep        Int?                   @default(0)
+  availabilityOverrides AvailabilityOverride[]
+  bookings              Booking[]
+  calendarEntries       BookingCalendarEntry[]
+  giftCards             GiftCard[]
+  documents             KycDocument[]
   payoutRequests        PayoutRequest[]
   portfolio             PortfolioItem[]
+  reviews               Review[]
+  services              Service[]
+  seats                 ServiceSeat[]
+  staff                 StaffMember[]
+  supplyOrders          SupplyOrder[]
+  reviewedBy            User?                  @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
+  user                  User?                  @relation(fields: [userId], references: [id])
+  payoutMethods         VendorPayoutMethod[]
+  statusHistory         VendorStatusHistory[]
+  walletTransactions    WalletTransaction[]
+  weeklyHours           WeeklyAvailability[]
 
   @@index([status])
 }
 
 model PortfolioItem {
-  id         String   @id @default(cuid())
-  vendorId   String
-  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  storageKey String
-  caption    String?
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          String            @id @default(cuid())
+  vendorId    String
+  storageKey  String?
+  caption     String?
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  externalUrl String?
+  type        PortfolioItemType @default(IMAGE)
+  vendor      Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId])
 }
 
 model User {
-  id               String                 @id @default(cuid())
-  email            String                 @unique
-  firebaseUid      String?                @unique
-  role             UserRole               @default(CUSTOMER)
-  lastSignedInAt   DateTime?
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  sessions         Session[]
-  emailOtps        EmailOtp[]
-  vendor           Vendor?
-  customerProfile  CustomerProfile?
-  statusEvents     VendorStatusHistory[]  @relation("VendorStatusActor")
-  reviewedVendors  Vendor[]               @relation("VendorReviewedBy")
-  customerBookings Booking[]              @relation("CustomerBookings")
-  createdBookings  Booking[]              @relation("CreatedBookings")
-  calendarEntries  BookingCalendarEntry[] @relation("CalendarCustomerEntries")
-  pushTokens       PushToken[]
-  writtenReviews   Review[]
-  platformSettingsUpdated PlatformSetting[] @relation("PlatformSettingUpdatedBy")
+  id                      String                 @id @default(cuid())
+  email                   String                 @unique
+  role                    UserRole               @default(CUSTOMER)
+  lastSignedInAt          DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  firebaseUid             String?                @unique
+  createdBookings         Booking[]              @relation("CreatedBookings")
+  customerBookings        Booking[]              @relation("CustomerBookings")
+  calendarEntries         BookingCalendarEntry[] @relation("CalendarCustomerEntries")
+  customerProfile         CustomerProfile?
+  emailOtps               EmailOtp[]
+  platformSettingsUpdated PlatformSetting[]      @relation("PlatformSettingUpdatedBy")
+  pushTokens              PushToken[]
+  writtenReviews          Review[]
+  sessions                Session[]
+  reviewedVendors         Vendor[]               @relation("VendorReviewedBy")
+  vendor                  Vendor?
+  statusEvents            VendorStatusHistory[]  @relation("VendorStatusActor")
 }
 
 model EmailOtp {
@@ -98,7 +99,7 @@ model EmailOtp {
   attemptCount Int       @default(0)
   createdAt    DateTime  @default(now())
   userId       String?
-  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user         User?     @relation(fields: [userId], references: [id])
 
   @@index([email])
   @@index([expiresAt])
@@ -108,13 +109,13 @@ model EmailOtp {
 model KycDocument {
   id         String   @id @default(cuid())
   vendorId   String
-  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   type       String
   fileName   String
   storageKey String
   mimeType   String?
   sizeBytes  Int?
   uploadedAt DateTime @default(now())
+  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId])
 }
@@ -122,13 +123,13 @@ model KycDocument {
 model VendorStatusHistory {
   id         String        @id @default(cuid())
   vendorId   String
-  vendor     Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   fromStatus VendorStatus?
   toStatus   VendorStatus
   reason     String?
   actorId    String?
-  actor      User?         @relation("VendorStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
   createdAt  DateTime      @default(now())
+  actor      User?         @relation("VendorStatusActor", fields: [actorId], references: [id])
+  vendor     Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@index([vendorId])
   @@index([actorId])
@@ -138,16 +139,512 @@ model Session {
   id         String    @id @default(cuid())
   tokenHash  String    @unique
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime  @default(now())
   expiresAt  DateTime
   revokedAt  DateTime?
   lastUsedAt DateTime?
   userAgent  String?
   clientIp   String?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Service {
+  id              String                 @id @default(cuid())
+  vendorId        String
+  name            String
+  description     String?
+  priceCents      Int
+  durationMinutes Int
+  bufferMinutes   Int                    @default(0)
+  isActive        Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  depositPercent  Int?
+  categoryId      String?
+  bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+  category        Category?              @relation(fields: [categoryId], references: [id])
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  images          ServiceImage[]
+  seatLinks       ServiceSeatService[]
+
+  @@index([vendorId, isActive])
+  @@index([categoryId])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  icon      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  services  Service[]
+
+  @@index([slug])
+}
+
+model ServiceImage {
+  id         String   @id @default(cuid())
+  serviceId  String
+  storageKey String
+  caption    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+}
+
+model WeeklyAvailability {
+  id          String   @id @default(cuid())
+  vendorId    String
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, dayOfWeek])
+}
+
+model AvailabilityOverride {
+  id        String                   @id @default(cuid())
+  vendorId  String
+  startsAt  DateTime
+  endsAt    DateTime
+  type      AvailabilityOverrideType
+  reason    String?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+  vendor    Vendor                   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, startsAt])
+}
+
+model Booking {
+  id                  String                 @id @default(cuid())
+  reference           String                 @unique
+  vendorId            String
+  serviceId           String
+  customerName        String
+  customerEmail       String?
+  customerPhone       String?
+  status              BookingStatus          @default(PENDING)
+  scheduledStart      DateTime
+  scheduledEnd        DateTime
+  pricePesewas        Int
+  depositPesewas      Int
+  balancePesewas      Int
+  notes               String?
+  cancelledAt         DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  customerUserId      String?
+  cancellationReason  String?
+  cancelledBy         BookingCancelActor?
+  rescheduleCount     Int                    @default(0)
+  rescheduledAt       DateTime?
+  reminderSentAt      DateTime?
+  seatId              String?
+  staffId             String?
+  createdByUserId     String?
+  source              BookingSource          @default(ONLINE)
+  paidAt              DateTime?
+  createdBy           User?                  @relation("CreatedBookings", fields: [createdByUserId], references: [id])
+  customer            User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id])
+  seat                ServiceSeat?           @relation(fields: [seatId], references: [id])
+  service             Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff               StaffMember?           @relation(fields: [staffId], references: [id])
+  vendor              Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  calendarEntries     BookingCalendarEntry[]
+  giftCardRedemptions GiftCardRedemption[]
+  paymentIntent       PaymentIntent?
+  review              Review?
+  walletTransactions  WalletTransaction[]
+
+  @@index([vendorId, scheduledStart])
+  @@index([vendorId, status])
+  @@index([serviceId, scheduledStart])
+  @@index([customerUserId, scheduledStart])
+  @@index([seatId, scheduledStart])
+  @@index([staffId, scheduledStart])
+}
+
+model PaymentIntent {
+  id            String          @id @default(cuid())
+  bookingId     String?         @unique
+  provider      PaymentProvider
+  providerRef   String          @unique
+  status        PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
+  amountPesewas Int
+  currency      String          @default("GHS")
+  metadata      Json?
+  lastError     String?
+  confirmedAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  giftCardId    String?         @unique
+  booking       Booking?        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  giftCard      GiftCard?       @relation("GiftCardPaymentIntent", fields: [giftCardId], references: [id])
+  supplyOrder   SupplyOrder?
+}
+
+model GiftCard {
+  id             String               @id @default(cuid())
+  code           String               @unique
+  vendorId       String
+  valuePesewas   Int
+  balancePesewas Int
+  currency       String               @default("GHS")
+  purchaserName  String
+  purchaserEmail String
+  purchaserPhone String?
+  recipientName  String?
+  recipientEmail String?
+  message        String?
+  status         GiftCardStatus       @default(PENDING_PAYMENT)
+  expiresAt      DateTime?
+  activatedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  vendor         Vendor               @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  redemptions    GiftCardRedemption[]
+  paymentIntent  PaymentIntent?       @relation("GiftCardPaymentIntent")
+
+  @@index([vendorId])
+  @@index([status])
+  @@index([code])
+}
+
+model GiftCardRedemption {
+  id                   String    @id @default(cuid())
+  giftCardId           String
+  bookingId            String?
+  amountPesewas        Int
+  depositAmountPesewas Int       @default(0)
+  balanceAmountPesewas Int       @default(0)
+  createdAt            DateTime  @default(now())
+  refundedAt           DateTime?
+  booking              Booking?  @relation(fields: [bookingId], references: [id])
+  giftCard             GiftCard  @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
+  @@index([bookingId])
+}
+
+model BookingCalendarEntry {
+  id             String            @id @default(cuid())
+  bookingId      String
+  ownerType      CalendarOwnerType
+  vendorId       String?
+  customerUserId String?
+  serviceId      String
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  status         BookingStatus
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  seatId         String?
+  staffId        String?
+  booking        Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer       User?             @relation("CalendarCustomerEntries", fields: [customerUserId], references: [id])
+  seat           ServiceSeat?      @relation(fields: [seatId], references: [id])
+  service        Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff          StaffMember?      @relation(fields: [staffId], references: [id])
+  vendor         Vendor?           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, ownerType])
+  @@index([vendorId, scheduledStart])
+  @@index([customerUserId, scheduledStart])
+  @@index([seatId, scheduledStart])
+  @@index([staffId, scheduledStart])
+}
+
+model StaffMember {
+  id               String                 @id @default(cuid())
+  vendorId         String
+  name             String
+  bio              String?
+  avatarStorageKey String?
+  specialties      String[]               @default([])
+  isActive         Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  bookings         Booking[]
+  calendarEntries  BookingCalendarEntry[]
+  seats            ServiceSeat[]
+  vendor           Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, isActive])
+}
+
+model ServiceSeat {
+  id              String                 @id @default(cuid())
+  vendorId        String
+  label           String
+  description     String?
+  capacity        Int                    @default(1)
+  isActive        Boolean                @default(true)
+  staffId         String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  bookings        Booking[]
+  calendarEntries BookingCalendarEntry[]
+  staff           StaffMember?           @relation(fields: [staffId], references: [id])
+  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  services        ServiceSeatService[]
+
+  @@index([vendorId, isActive])
+  @@index([staffId])
+}
+
+model ServiceSeatService {
+  serviceId String
+  seatId    String
+  seat      ServiceSeat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  service   Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, seatId])
+  @@index([seatId])
+}
+
+model PushToken {
+  id               String       @id @default(cuid())
+  userId           String
+  token            String       @unique
+  platform         PushPlatform @default(EXPO)
+  deviceName       String?
+  appVersion       String?
+  lastRegisteredAt DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CustomerProfile {
+  userId                 String    @id
+  fullName               String?
+  phoneNumber            String?
+  dateOfBirth            DateTime?
+  preferredPronouns      String?
+  city                   String?
+  country                String?
+  profilePhotoStorageKey String?
+  profilePhotoVersion    Int       @default(0)
+  marketingOptIn         Boolean   @default(false)
+  smsOptIn               Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phoneNumber])
+}
+
+model Review {
+  id               String    @id @default(cuid())
+  bookingId        String    @unique
+  vendorId         String
+  customerUserId   String
+  rating           Int
+  comment          String?
+  reply            String?
+  repliedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  mediaStorageKeys String[]  @default([])
+  booking          Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customer         User      @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
+  vendor           Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@index([customerUserId])
+}
+
+model SupplySupplier {
+  id           String            @id @default(cuid())
+  name         String
+  contactEmail String?
+  phoneNumber  String?
+  serviceAreas String[]          @default([])
+  priority     Int?
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  orderItems   SupplyOrderItem[]
+  products     SupplyProduct[]
+
+  @@index([isActive])
+}
+
+model SupplyProduct {
+  id               String            @id @default(cuid())
+  supplierId       String
+  category         String
+  name             String
+  description      String?
+  unit             String?
+  leadTimeDays     Int?
+  mediaUrl         String?
+  attributes       Json?
+  isActive         Boolean           @default(true)
+  inStock          Boolean           @default(true)
+  stockRefreshedAt DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  mediaStorageKey  String?
+  orderItems       SupplyOrderItem[]
+  prices           SupplyPrice[]
+  supplier         SupplySupplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId, isActive])
+  @@index([category, isActive])
+  @@index([inStock, isActive])
+}
+
+model SupplyPrice {
+  id                String        @id @default(cuid())
+  productId         String
+  supplierCostCents Int
+  markupBasisPoints Int
+  vendorPriceCents  Int
+  startsAt          DateTime      @default(now())
+  endsAt            DateTime?
+  createdAt         DateTime      @default(now())
+  product           SupplyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, startsAt])
+}
+
+model SupplyOrder {
+  id               String                     @id @default(cuid())
+  vendorId         String
+  totalCents       Int
+  deliveryFeeCents Int                        @default(0)
+  status           SupplyOrderStatus          @default(DRAFT)
+  paymentIntentId  String?                    @unique
+  note             String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  paymentIntent    PaymentIntent?             @relation(fields: [paymentIntentId], references: [id])
+  vendor           Vendor                     @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  items            SupplyOrderItem[]
+  history          SupplyOrderStatusHistory[]
+
+  @@index([vendorId, status])
+}
+
+model SupplyOrderItem {
+  id                String         @id @default(cuid())
+  orderId           String
+  productId         String
+  supplierId        String
+  name              String
+  category          String
+  unit              String?
+  leadTimeDays      Int?
+  quantity          Int
+  vendorPriceCents  Int
+  supplierCostCents Int
+  createdAt         DateTime       @default(now())
+  order             SupplyOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           SupplyProduct  @relation(fields: [productId], references: [id])
+  supplier          SupplySupplier @relation(fields: [supplierId], references: [id])
+}
+
+model SupplyOrderStatusHistory {
+  id         String             @id @default(cuid())
+  orderId    String
+  fromStatus SupplyOrderStatus?
+  toStatus   SupplyOrderStatus
+  note       String?
+  createdAt  DateTime           @default(now())
+  order      SupplyOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model PlatformSetting {
+  id          String             @id @default(cuid())
+  key         PlatformSettingKey @unique
+  intValue    Int?
+  updatedById String?
+  updatedAt   DateTime           @default(now())
+  updatedBy   User?              @relation("PlatformSettingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([key])
+}
+
+model VendorPayoutMethod {
+  id             String           @id @default(cuid())
+  vendorId       String
+  type           PayoutMethodType @default(BANK_ACCOUNT)
+  accountName    String
+  currency       String           @default("GHS")
+  isPrimary      Boolean          @default(false)
+  accountNumber  String?
+  bankName       String?
+  branchCode     String?
+  mobileNetwork  String?
+  mobileNumber   String?
+  isVerified     Boolean          @default(false)
+  lastVerifiedAt DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  payoutRequests PayoutRequest[]
+  vendor         Vendor           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+}
+
+model WalletTransaction {
+  id            String            @id @default(cuid())
+  vendorId      String
+  amountPesewas Int
+  type          TransactionType
+  status        TransactionStatus @default(COMPLETED)
+  referenceId   String?
+  description   String
+  balanceAfter  Int?
+  createdAt     DateTime          @default(now())
+  availableAt   DateTime          @default(now())
+  bookingId     String?
+  booking       Booking?          @relation(fields: [bookingId], references: [id])
+  vendor        Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, availableAt])
+}
+
+model PayoutRequest {
+  id                String             @id @default(cuid())
+  vendorId          String
+  amountPesewas     Int
+  currency          String             @default("GHS")
+  payoutMethodId    String
+  status            PayoutStatus       @default(REQUESTED)
+  note              String?
+  rejectionReason   String?
+  requestedAt       DateTime           @default(now())
+  processedAt       DateTime?
+  destinationMethod VendorPayoutMethod @relation(fields: [payoutMethodId], references: [id])
+  vendor            Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId, status])
+}
+
+enum PortfolioItemType {
+  IMAGE
+  VIDEO
+  LINK
 }
 
 enum UserRole {
@@ -164,155 +661,9 @@ enum VendorStatus {
   SUSPENDED
 }
 
-model Service {
-  id              String                 @id @default(cuid())
-  vendorId        String
-  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  categoryId      String?
-  category        Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  name            String
-  description     String?
-  priceCents      Int
-  durationMinutes Int
-  bufferMinutes   Int                    @default(0)
-  depositPercent  Int?
-  isActive        Boolean                @default(true)
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  bookings        Booking[]
-  calendarEntries BookingCalendarEntry[]
-  images          ServiceImage[]
-  seatLinks       ServiceSeatService[]
-
-  @@index([vendorId, isActive])
-  @@index([categoryId])
-}
-
-model Category {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  slug      String    @unique
-  icon      String?
-  services  Service[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([slug])
-}
-
-model ServiceImage {
-  id         String   @id @default(cuid())
-  serviceId  String
-  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  storageKey String
-  caption    String?
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([serviceId])
-}
-
-model WeeklyAvailability {
-  id          String   @id @default(cuid())
-  vendorId    String
-  vendor      Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  dayOfWeek   Int
-  startMinute Int
-  endMinute   Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([vendorId, dayOfWeek])
-}
-
-model AvailabilityOverride {
-  id        String                   @id @default(cuid())
-  vendorId  String
-  vendor    Vendor                   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  startsAt  DateTime
-  endsAt    DateTime
-  type      AvailabilityOverrideType
-  reason    String?
-  createdAt DateTime                 @default(now())
-  updatedAt DateTime                 @updatedAt
-
-  @@index([vendorId, startsAt])
-}
-
 enum AvailabilityOverrideType {
   BLOCK
   EXTEND
-}
-
-model Booking {
-  id                 String                 @id @default(cuid())
-  reference          String                 @unique
-  vendorId           String
-  vendor             Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  serviceId          String
-  service            Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  customerUserId     String?
-  customer           User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id], onDelete: SetNull)
-  customerName       String
-  customerEmail      String?
-  customerPhone      String?
-  source             BookingSource          @default(ONLINE)
-  status             BookingStatus          @default(PENDING)
-  scheduledStart     DateTime
-  scheduledEnd       DateTime
-  pricePesewas       Int
-  depositPesewas     Int
-  balancePesewas     Int
-  paymentIntent      PaymentIntent?
-  createdByUserId    String?
-  createdBy          User?                  @relation("CreatedBookings", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  notes              String?
-  paidAt             DateTime?
-  cancelledAt        DateTime?
-  cancellationReason String?
-  cancelledBy        BookingCancelActor?
-  rescheduledAt      DateTime?
-  rescheduleCount    Int                    @default(0)
-  reminderSentAt     DateTime?
-  completedAt        DateTime?
-  seatId             String?
-  seat               ServiceSeat?           @relation(fields: [seatId], references: [id], onDelete: SetNull)
-  staffId            String?
-  staff              StaffMember?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  calendarEntries    BookingCalendarEntry[]
-  review             Review?
-  giftCardRedemptions GiftCardRedemption[]
-  walletTransactions  WalletTransaction[]
-
-  @@index([vendorId, scheduledStart])
-  @@index([vendorId, status])
-  @@index([serviceId, scheduledStart])
-  @@index([customerUserId, scheduledStart])
-  @@index([seatId, scheduledStart])
-  @@index([staffId, scheduledStart])
-}
-
-model PaymentIntent {
-  id            String          @id @default(cuid())
-  bookingId     String?         @unique
-  booking       Booking?        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  provider      PaymentProvider
-  providerRef   String          @unique
-  status        PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
-  amountPesewas Int
-  currency      String          @default("GHS")
-  metadata      Json?
-  lastError     String?
-  confirmedAt   DateTime?
-  cancelledAt   DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  supplyOrder   SupplyOrder?
-  giftCardId    String?         @unique
-  giftCard      GiftCard?       @relation("GiftCardPaymentIntent", fields: [giftCardId], references: [id], onDelete: SetNull)
 }
 
 enum BookingStatus {
@@ -342,49 +693,6 @@ enum PaymentStatus {
   CANCELED
 }
 
-model GiftCard {
-  id               String                @id @default(cuid())
-  code             String                @unique
-  vendorId         String
-  vendor           Vendor                @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  valuePesewas     Int
-  balancePesewas   Int
-  currency         String                @default("GHS")
-  purchaserName    String
-  purchaserEmail   String
-  purchaserPhone   String?
-  recipientName    String?
-  recipientEmail   String?
-  message          String?
-  status           GiftCardStatus        @default(PENDING_PAYMENT)
-  expiresAt        DateTime?
-  activatedAt      DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  redemptions      GiftCardRedemption[]
-  paymentIntent    PaymentIntent?        @relation("GiftCardPaymentIntent")
-
-  @@index([vendorId])
-  @@index([status])
-  @@index([code])
-}
-
-model GiftCardRedemption {
-  id                     String     @id @default(cuid())
-  giftCardId             String
-  giftCard               GiftCard   @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
-  bookingId              String?
-  booking                Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  amountPesewas          Int
-  depositAmountPesewas   Int        @default(0)
-  balanceAmountPesewas   Int        @default(0)
-  createdAt              DateTime   @default(now())
-  refundedAt             DateTime?
-
-  @@index([giftCardId])
-  @@index([bookingId])
-}
-
 enum GiftCardStatus {
   PENDING_PAYMENT
   ACTIVE
@@ -393,100 +701,9 @@ enum GiftCardStatus {
   EXPIRED
 }
 
-model BookingCalendarEntry {
-  id             String            @id @default(cuid())
-  bookingId      String
-  booking        Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  ownerType      CalendarOwnerType
-  vendorId       String?
-  vendor         Vendor?           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  customerUserId String?
-  customer       User?             @relation("CalendarCustomerEntries", fields: [customerUserId], references: [id], onDelete: SetNull)
-  serviceId      String
-  service        Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  seatId         String?
-  seat           ServiceSeat?      @relation(fields: [seatId], references: [id], onDelete: SetNull)
-  staffId        String?
-  staff          StaffMember?      @relation(fields: [staffId], references: [id], onDelete: SetNull)
-  scheduledStart DateTime
-  scheduledEnd   DateTime
-  status         BookingStatus
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-
-  @@unique([bookingId, ownerType])
-  @@index([vendorId, scheduledStart])
-  @@index([customerUserId, scheduledStart])
-  @@index([seatId, scheduledStart])
-  @@index([staffId, scheduledStart])
-}
-
-model StaffMember {
-  id              String        @id @default(cuid())
-  vendorId        String
-  vendor          Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  name            String
-  bio             String?
-  avatarStorageKey String?
-  specialties     String[]      @default([])
-  isActive        Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  seats           ServiceSeat[]
-  bookings        Booking[]
-  calendarEntries BookingCalendarEntry[]
-
-  @@index([vendorId, isActive])
-}
-
-model ServiceSeat {
-  id              String                 @id @default(cuid())
-  vendorId        String
-  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  label           String
-  description     String?
-  capacity        Int                    @default(1)
-  isActive        Boolean                @default(true)
-  staffId         String?
-  staff           StaffMember?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  bookings        Booking[]
-  calendarEntries BookingCalendarEntry[]
-  services        ServiceSeatService[]
-
-  @@index([vendorId, isActive])
-  @@index([staffId])
-}
-
-model ServiceSeatService {
-  serviceId String
-  seatId    String
-  service   Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  seat      ServiceSeat @relation(fields: [seatId], references: [id], onDelete: Cascade)
-
-  @@id([serviceId, seatId])
-  @@index([seatId])
-}
-
 enum CalendarOwnerType {
   VENDOR
   CUSTOMER
-}
-
-model PushToken {
-  id               String       @id @default(cuid())
-  userId           String
-  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token            String       @unique
-  platform         PushPlatform @default(EXPO)
-  deviceName       String?
-  appVersion       String?
-  lastRegisteredAt DateTime     @default(now())
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  @@index([userId])
 }
 
 enum PushPlatform {
@@ -496,152 +713,10 @@ enum PushPlatform {
   EXPO
 }
 
-model CustomerProfile {
-  userId                String  @id
-  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fullName              String?
-  phoneNumber           String?
-  dateOfBirth           DateTime?
-  preferredPronouns     String?
-  city                  String?
-  country               String?
-  profilePhotoStorageKey String?
-  profilePhotoVersion   Int     @default(0)
-  marketingOptIn        Boolean @default(false)
-  smsOptIn              Boolean @default(false)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  @@index([phoneNumber])
-}
-
 enum BookingCancelActor {
   CUSTOMER
   VENDOR
   SYSTEM
-}
-
-model Review {
-  id             String    @id @default(cuid())
-  bookingId      String    @unique
-  booking        Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  vendorId       String
-  vendor         Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  customerUserId String
-  customer       User      @relation(fields: [customerUserId], references: [id], onDelete: Cascade)
-  rating         Int
-  comment        String?
-  mediaStorageKeys String[] @default([])
-  reply          String?
-  repliedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@index([vendorId])
-  @@index([customerUserId])
-}
-
-model SupplySupplier {
-  id            String          @id @default(cuid())
-  name          String
-  contactEmail  String?
-  phoneNumber   String?
-  serviceAreas  String[]        @default([])
-  priority      Int?
-  isActive      Boolean         @default(true)
-  products      SupplyProduct[]
-  orderItems    SupplyOrderItem[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  @@index([isActive])
-}
-
-model SupplyProduct {
-  id               String          @id @default(cuid())
-  supplierId       String
-  supplier         SupplySupplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  category         String
-  name             String
-  description      String?
-  unit             String?
-  leadTimeDays     Int?
-  mediaUrl         String?
-  mediaStorageKey  String?
-  attributes       Json?
-  isActive         Boolean         @default(true)
-  inStock          Boolean         @default(true)
-  stockRefreshedAt DateTime?
-  prices           SupplyPrice[]
-  orderItems       SupplyOrderItem[]
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-
-  @@index([supplierId, isActive])
-  @@index([category, isActive])
-  @@index([inStock, isActive])
-}
-
-model SupplyPrice {
-  id                 String         @id @default(cuid())
-  productId          String
-  product            SupplyProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplierCostCents  Int
-  markupBasisPoints  Int
-  vendorPriceCents   Int
-  startsAt           DateTime       @default(now())
-  endsAt             DateTime?
-  createdAt          DateTime       @default(now())
-
-  @@index([productId, startsAt])
-}
-
-model SupplyOrder {
-  id              String                 @id @default(cuid())
-  vendorId        String
-  vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  totalCents      Int
-  deliveryFeeCents Int                   @default(0)
-  status          SupplyOrderStatus      @default(DRAFT)
-  paymentIntentId String?                @unique
-  paymentIntent   PaymentIntent?         @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
-  note            String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  items           SupplyOrderItem[]
-  history         SupplyOrderStatusHistory[]
-
-  @@index([vendorId, status])
-}
-
-model SupplyOrderItem {
-  id                 String        @id @default(cuid())
-  orderId            String
-  order              SupplyOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId          String
-  product            SupplyProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
-  supplierId         String
-  supplier           SupplySupplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  name               String
-  category           String
-  unit               String?
-  leadTimeDays       Int?
-  quantity           Int
-  vendorPriceCents   Int
-  supplierCostCents  Int
-  createdAt          DateTime      @default(now())
-}
-
-model SupplyOrderStatusHistory {
-  id        String            @id @default(cuid())
-  orderId   String
-  order     SupplyOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  fromStatus SupplyOrderStatus?
-  toStatus  SupplyOrderStatus
-  note      String?
-  createdAt DateTime          @default(now())
-
-  @@index([orderId])
 }
 
 enum SupplyOrderStatus {
@@ -654,51 +729,8 @@ enum SupplyOrderStatus {
   CANCELLED
 }
 
-model PlatformSetting {
-  id           String               @id @default(cuid())
-  key          PlatformSettingKey   @unique
-  intValue     Int?
-  updatedById  String?
-  updatedBy    User?                @relation("PlatformSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-  updatedAt    DateTime             @default(now())
-
-  @@index([key])
-}
-
 enum PlatformSettingKey {
   SERVICE_MARKUP_BPS
-}
-
-model VendorPayoutMethod {
-  id              String   @id @default(cuid())
-  vendorId        String
-  vendor          Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  type            PayoutMethodType @default(BANK_ACCOUNT)
-  
-  // Shared
-  accountName     String
-  currency        String   @default("GHS")
-  isPrimary       Boolean  @default(false)
-
-  // Bank Details
-  accountNumber   String?
-  bankName        String?
-  branchCode      String?
-
-  // Mobile Money Details
-  mobileNetwork   String?  // MTN, VODAFONE, AIRTELTIGO
-  mobileNumber    String?
-
-  // Security
-  isVerified      Boolean  @default(false) 
-  lastVerifiedAt  DateTime?
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  payoutRequests  PayoutRequest[]
-
-  @@index([vendorId])
 }
 
 enum PayoutMethodType {
@@ -706,54 +738,11 @@ enum PayoutMethodType {
   MOBILE_MONEY
 }
 
-model WalletTransaction {
-  id              String            @id @default(cuid())
-  vendorId        String
-  vendor          Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  amountPesewas   Int               // Positive for earnings, Negative for payouts/refunds
-  type            TransactionType
-  status          TransactionStatus @default(COMPLETED)
-  
-  // Linking/Audit
-  bookingId       String?           
-  booking         Booking?          @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  
-  referenceId     String?           // For payouts, external refs, etc.
-  description     String
-  
-  balanceAfter    Int?              // Snapshot of balance for easy audit
-
-  createdAt       DateTime          @default(now())
-  availableAt     DateTime          @default(now()) // For clearance period logic
-
-  @@index([vendorId, availableAt])
-}
-
-model PayoutRequest {
-  id              String             @id @default(cuid())
-  vendorId        String
-  vendor          Vendor             @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  amountPesewas   Int
-  currency        String             @default("GHS")
-  
-  destinationMethod VendorPayoutMethod @relation(fields: [payoutMethodId], references: [id])
-  payoutMethodId  String
-
-  status          PayoutStatus       @default(REQUESTED)
-  note            String?            // Admin note
-  rejectionReason String?
-
-  requestedAt     DateTime           @default(now())
-  processedAt     DateTime?
-
-  @@index([vendorId, status])
-}
-
 enum TransactionType {
-  EARNING          // Booking completion
-  PAYOUT           // Withdrawal
-  REFUND           // Funds returned to customer
-  ADJUSTMENT       // Admin correction
+  EARNING
+  PAYOUT
+  REFUND
+  ADJUSTMENT
 }
 
 enum TransactionStatus {

@@ -43,6 +43,8 @@ export interface ServiceImageSummary {
 export interface PortfolioItemSummary {
   id: string;
   url: string;
+  type: string;
+  externalUrl: string | null;
   caption: string | null;
 }
 
@@ -395,7 +397,9 @@ export class PublicCatalogService {
 
     return items.map((item) => ({
       id: item.id,
-      url: this.storage.buildPublicUrl(item.storageKey),
+      url: item.storageKey ? this.storage.buildPublicUrl(item.storageKey) : (item.externalUrl ?? ''),
+      type: item.type,
+      externalUrl: item.externalUrl ?? null,
       caption: item.caption ?? null,
     }));
   }

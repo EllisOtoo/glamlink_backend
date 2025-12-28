@@ -1,9 +1,18 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
+import { PortfolioItemType } from '@prisma/client';
 
 export class ConfirmPortfolioUploadDto {
   @IsString()
-  @IsNotEmpty()
-  storageKey: string;
+  @IsOptional()
+  storageKey?: string;
+
+  @IsEnum(PortfolioItemType)
+  @IsOptional()
+  type?: PortfolioItemType;
+
+  @IsUrl()
+  @IsOptional()
+  externalUrl?: string;
 
   @IsString()
   @IsOptional()

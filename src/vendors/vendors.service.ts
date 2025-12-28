@@ -854,11 +854,18 @@ export class VendorsService {
     payload: ConfirmPortfolioUploadDto,
   ): Promise<PortfolioItem> {
     const vendor = await this.requireVendor(userId);
-    const normalizedKey = payload.storageKey.trim();
-    const expectedPrefix = `vendors/${vendor.id}/portfolio/`;
-    if (!normalizedKey.startsWith(expectedPrefix)) {
+
+    if (payload.storageKey) {
+      const normalizedKey = payload.storageKey.trim();
+      const expectedPrefix = `vendors/${vendor.id}/portfolio/`;
+      if (!normalizedKey.startsWith(expectedPrefix)) {
+        throw new BadRequestException(
+          'Portfolio storage key does not belong to this vendor.',
+        );
+      }
+    } else if (!payload.externalUrl) {
       throw new BadRequestException(
-        'Portfolio storage key does not belong to this vendor.',
+        'Either storageKey or externalUrl must be provided.',
       );
     }
 
@@ -872,7 +879,9 @@ export class VendorsService {
     return this.prisma.portfolioItem.create({
       data: {
         vendorId: vendor.id,
-        storageKey: normalizedKey,
+        storageKey: payload.storageKey?.trim(),
+        type: payload.type ?? (payload.externalUrl ? 'LINK' : 'IMAGE'),
+        externalUrl: payload.externalUrl,
         caption: payload.caption,
         sortOrder: nextSortOrder,
       },

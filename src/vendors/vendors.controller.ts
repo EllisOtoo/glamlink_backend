@@ -201,7 +201,9 @@ export class VendorsController {
     const items = await this.vendorsService.listPortfolioItems(vendor.id);
     return items.map((item) => ({
       ...item,
-      url: this.storage.buildPublicUrl(item.storageKey),
+      url: item.storageKey 
+        ? this.storage.buildPublicUrl(item.storageKey) 
+        : (item.externalUrl ?? ''),
     }));
   }
 
@@ -225,7 +227,9 @@ export class VendorsController {
     const item = await this.vendorsService.confirmPortfolioUpload(user.id, dto);
     return {
       ...item,
-      url: this.storage.buildPublicUrl(item.storageKey),
+      url: item.storageKey
+        ? this.storage.buildPublicUrl(item.storageKey)
+        : (item.externalUrl ?? ''),
     };
   }
 
