@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import {
   VendorStatus,
   VendorStatusHistory,
   StaffMember,
+  PortfolioItem,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
@@ -25,6 +27,8 @@ import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
 import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
 import { CreateSeatDto } from './dto/create-seat.dto';
 import { UpdateSeatDto } from './dto/update-seat.dto';
+import { RequestPortfolioUploadUrlDto } from './dto/request-portfolio-upload-url.dto';
+import { ConfirmPortfolioUploadDto } from './dto/confirm-portfolio-upload.dto';
 import { MAX_KYC_DOCUMENT_SIZE_BYTES } from './vendors.constants';
 
 export interface VendorProfileResult extends Vendor {
@@ -335,6 +339,31 @@ export class VendorsService {
         mimeType: payload.mimeType,
         sizeBytes: payload.sizeBytes,
       },
+    });
+  }
+
+  async deleteKycDocument(userId: string, documentId: string): Promise<void> {
+    const vendor = await this.requireVendor(userId);
+
+    const document = await this.prisma.kycDocument.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found.');
+    }
+
+    if (document.vendorId !== vendor.id) {
+      throw new ForbiddenException(
+        'You do not have permission to delete this document.',
+      );
+    }
+
+    // Note: In a production environment, we should also delete the file from S3.
+    // However, for safety and audit trails, we often keep the file and just remove the DB record,
+    // or use a background job to clean up storage.
+    await this.prisma.kycDocument.delete({
+      where: { id: documentId },
     });
   }
 
@@ -790,6 +819,114 @@ export class VendorsService {
     }
 
     return { extension, normalizedMime };
+  }
+
+  async listPortfolioItems(vendorId: string): Promise<PortfolioItem[]> {
+    return this.prisma.portfolioItem.findMany({
+      where: { vendorId },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  async requestPortfolioUploadUrl(
+    userId: string,
+    params: RequestPortfolioUploadUrlDto,
+  ) {
+    const vendor = await this.requireVendor(userId);
+    this.assertPortfolioConstraints(params.mimeType, params.sizeBytes);
+    const extension = resolveImageExtension(params.mimeType);
+    if (!extension) {
+      throw new BadRequestException('Unsupported image type for portfolio.');
+    }
+    const storageKey = `vendors/${vendor.id}/portfolio/${randomUUID()}.${extension}`;
+    return this.storage.createPresignedUpload({
+      key: storageKey,
+      contentType: normalizeMimeType(params.mimeType),
+      metadata: {
+        vendorId: vendor.id,
+        purpose: 'portfolio',
+      },
+    });
+  }
+
+  async confirmPortfolioUpload(
+    userId: string,
+    payload: ConfirmPortfolioUploadDto,
+  ): Promise<PortfolioItem> {
+    const vendor = await this.requireVendor(userId);
+    const normalizedKey = payload.storageKey.trim();
+    const expectedPrefix = `vendors/${vendor.id}/portfolio/`;
+    if (!normalizedKey.startsWith(expectedPrefix)) {
+      throw new BadRequestException(
+        'Portfolio storage key does not belong to this vendor.',
+      );
+    }
+
+    // Get current max sort order
+    const maxSortItem = await this.prisma.portfolioItem.findFirst({
+      where: { vendorId: vendor.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const nextSortOrder = (maxSortItem?.sortOrder ?? -1) + 1;
+
+    return this.prisma.portfolioItem.create({
+      data: {
+        vendorId: vendor.id,
+        storageKey: normalizedKey,
+        caption: payload.caption,
+        sortOrder: nextSortOrder,
+      },
+    });
+  }
+
+  async deletePortfolioItem(userId: string, itemId: string): Promise<void> {
+    const vendor = await this.requireVendor(userId);
+    const item = await this.prisma.portfolioItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Portfolio item not found.');
+    }
+
+    if (item.vendorId !== vendor.id) {
+      throw new ForbiddenException(
+        'You do not have permission to delete this item.',
+      );
+    }
+
+    await this.prisma.portfolioItem.delete({
+      where: { id: itemId },
+    });
+  }
+
+  private assertPortfolioConstraints(
+    mimeType?: string,
+    sizeBytes?: number,
+  ): void {
+    const normalizedMime = normalizeMimeType(mimeType);
+    if (!normalizedMime) {
+      throw new BadRequestException('Image mime type is required.');
+    }
+
+    if (
+      typeof sizeBytes !== 'number' ||
+      Number.isNaN(sizeBytes) ||
+      sizeBytes <= 0
+    ) {
+      throw new BadRequestException('Image file size is required.');
+    }
+
+    // Reuse logo size for now (2MB), or define a new constant
+    if (sizeBytes > MAX_VENDOR_LOGO_SIZE_BYTES) {
+      throw new BadRequestException(
+        'Portfolio image exceeds the maximum size of 2MB.',
+      );
+    }
+
+    if (!resolveImageExtension(normalizedMime)) {
+      throw new BadRequestException('Unsupported portfolio image type.');
+    }
   }
 
   private resolveKycExtension(mimeType: string): string | null {

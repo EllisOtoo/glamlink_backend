@@ -21,6 +21,8 @@ import { AdminRejectDto, AdminReviewDto } from './dto/admin-review.dto';
 import { VerifiedVendorGuard } from './guards/verified-vendor.guard';
 import { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
 import { ConfirmLogoDto } from './dto/confirm-logo.dto';
+import { RequestPortfolioUploadUrlDto } from './dto/request-portfolio-upload-url.dto';
+import { ConfirmPortfolioUploadDto } from './dto/confirm-portfolio-upload.dto';
 import { StorageService } from '../storage/storage.service';
 import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
 import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
@@ -36,7 +38,7 @@ export class VendorsController {
   ) {}
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Get('vendors/me')
   async getMyProfile(
     @CurrentUser() user: User,
@@ -46,7 +48,7 @@ export class VendorsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Put('vendors/me')
   async updateProfile(
     @CurrentUser() user: User,
@@ -57,7 +59,7 @@ export class VendorsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Post('vendors/me/logo/upload-url')
   requestLogoUpload(
     @CurrentUser() user: User,
@@ -67,7 +69,7 @@ export class VendorsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Put('vendors/me/logo')
   async confirmLogoUpload(
     @CurrentUser() user: User,
@@ -81,14 +83,14 @@ export class VendorsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Post('vendors/me/submit')
   async submitForReview(@CurrentUser() user: User) {
     return this.vendorsService.submitForReview(user.id);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Post('vendors/me/documents')
   async addDocument(
     @CurrentUser() user: User,
@@ -98,13 +100,24 @@ export class VendorsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.VENDOR)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
   @Post('vendors/me/documents/upload-url')
   requestKycUpload(
     @CurrentUser() user: User,
     @Body() dto: RequestKycUploadUrlDto,
   ) {
     return this.vendorsService.requestKycUploadUrl(user.id, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR, UserRole.CUSTOMER)
+  @Delete('vendors/me/documents/:id')
+  async deleteDocument(
+    @CurrentUser() user: User,
+    @Param('id') documentId: string,
+  ) {
+    await this.vendorsService.deleteKycDocument(user.id, documentId);
+    return { status: 'ok' };
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
@@ -176,6 +189,54 @@ export class VendorsController {
     @Param('seatId') seatId: string,
   ) {
     await this.vendorsService.archiveSeat(user.id, seatId);
+    return { status: 'ok' };
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Get('vendors/me/portfolio')
+  async listMyPortfolio(@CurrentUser() user: User) {
+    const vendor = await this.vendorsService.findByUserId(user.id);
+    if (!vendor) return [];
+    const items = await this.vendorsService.listPortfolioItems(vendor.id);
+    return items.map((item) => ({
+      ...item,
+      url: this.storage.buildPublicUrl(item.storageKey),
+    }));
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/portfolio/upload-url')
+  requestPortfolioUpload(
+    @CurrentUser() user: User,
+    @Body() dto: RequestPortfolioUploadUrlDto,
+  ) {
+    return this.vendorsService.requestPortfolioUploadUrl(user.id, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/portfolio')
+  async confirmPortfolioUpload(
+    @CurrentUser() user: User,
+    @Body() dto: ConfirmPortfolioUploadDto,
+  ) {
+    const item = await this.vendorsService.confirmPortfolioUpload(user.id, dto);
+    return {
+      ...item,
+      url: this.storage.buildPublicUrl(item.storageKey),
+    };
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Delete('vendors/me/portfolio/:itemId')
+  async deletePortfolioItem(
+    @CurrentUser() user: User,
+    @Param('itemId') itemId: string,
+  ) {
+    await this.vendorsService.deletePortfolioItem(user.id, itemId);
     return { status: 'ok' };
   }
 

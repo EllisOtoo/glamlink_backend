@@ -130,7 +130,9 @@ export class PayoutsService {
     }
 
     if (vendor.status !== 'VERIFIED') {
-      throw new BadRequestException('Only verified vendors can request payouts.');
+      throw new BadRequestException(
+        'Only verified vendors can request payouts.',
+      );
     }
 
     // Check balance
@@ -153,10 +155,7 @@ export class PayoutsService {
 
     // Check for cooldown (48 hours after payout method update)
     const cooldownPeriod = 48 * 60 * 60 * 1000;
-    if (
-      payoutMethod.updatedAt.getTime() + cooldownPeriod >
-      Date.now()
-    ) {
+    if (payoutMethod.updatedAt.getTime() + cooldownPeriod > Date.now()) {
       throw new BadRequestException(
         'Payouts are disabled for 48 hours after updating payout details for security.',
       );

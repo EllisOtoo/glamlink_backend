@@ -52,6 +52,11 @@ export class PublicCatalogController {
     return this.catalog.getVendorByHandle(handle);
   }
 
+  @Get('vendors/:handle/portfolio')
+  vendorPortfolioByHandle(@Param('handle') handle: string) {
+    return this.catalog.getVendorPortfolio(handle);
+  }
+
   @Get('services/discover')
   discoverServices(
     @Query() query: DiscoverServicesQueryDto,

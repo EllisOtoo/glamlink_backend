@@ -13,7 +13,10 @@ import {
 } from '@prisma/client';
 import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
-import { PaystackService, PaystackCheckoutPayload } from '../payments/paystack.service';
+import {
+  PaystackService,
+  PaystackCheckoutPayload,
+} from '../payments/paystack.service';
 import { CreateGiftCardDto } from './dto/create-gift-card.dto';
 
 export interface GiftCardApplicationResult {
@@ -64,7 +67,9 @@ export class GiftCardsService {
     }
 
     if (vendor.status !== VendorStatus.VERIFIED) {
-      throw new BadRequestException('Vendor must be verified to issue gift cards.');
+      throw new BadRequestException(
+        'Vendor must be verified to issue gift cards.',
+      );
     }
 
     const amount = this.assertAmount(dto.amountPesewas);
@@ -242,7 +247,9 @@ export class GiftCardsService {
     }
 
     if (card.vendorId !== params.vendorId) {
-      throw new BadRequestException('Gift card does not belong to this vendor.');
+      throw new BadRequestException(
+        'Gift card does not belong to this vendor.',
+      );
     }
 
     if (card.currency.toUpperCase() !== params.currency.toUpperCase()) {

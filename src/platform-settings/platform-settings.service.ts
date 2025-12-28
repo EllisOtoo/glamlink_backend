@@ -13,7 +13,11 @@ export class PlatformSettingsService {
       where: { key: PlatformSettingKey.SERVICE_MARKUP_BPS },
     });
 
-    if (!setting || setting.intValue === null || setting.intValue === undefined) {
+    if (
+      !setting ||
+      setting.intValue === null ||
+      setting.intValue === undefined
+    ) {
       return DEFAULT_SERVICE_MARKUP_BPS;
     }
 

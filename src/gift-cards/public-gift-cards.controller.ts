@@ -13,10 +13,7 @@ export class PublicGiftCardsController {
   }
 
   @Get(':code')
-  lookup(
-    @Param('code') code: string,
-    @Query() query: LookupGiftCardQueryDto,
-  ) {
+  lookup(@Param('code') code: string, @Query() query: LookupGiftCardQueryDto) {
     return this.giftCards.getGiftCardForPublic(code, query.email);
   }
 }

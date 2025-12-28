@@ -24,7 +24,12 @@ export class VerifiedVendorGuard implements CanActivate {
 
     const vendor = await this.vendorsService.findByUserId(user.id);
 
-    if (!vendor || vendor.status !== VendorStatus.VERIFIED) {
+    // Allow DRAFT status for onboarding access
+    if (
+      !vendor ||
+      (vendor.status !== VendorStatus.VERIFIED &&
+        vendor.status !== VendorStatus.DRAFT)
+    ) {
       throw new ForbiddenException(
         'Vendor account must be verified to access this resource.',
       );

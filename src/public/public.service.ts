@@ -40,6 +40,12 @@ export interface ServiceImageSummary {
   caption: string | null;
 }
 
+export interface PortfolioItemSummary {
+  id: string;
+  url: string;
+  caption: string | null;
+}
+
 export interface ServiceSummary {
   id: string;
   name: string;
@@ -363,6 +369,34 @@ export class PublicCatalogService {
       ...vendorSummary,
       services: serviceSummaries,
     };
+  }
+
+  async getVendorPortfolio(handle: string): Promise<PortfolioItemSummary[]> {
+    const normalizedHandle = this.normalizeHandle(handle);
+
+    if (!normalizedHandle) {
+      throw new NotFoundException('Vendor not found.');
+    }
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { handle: normalizedHandle },
+      select: { id: true, status: true },
+    });
+
+    if (!vendor || vendor.status !== VendorStatus.VERIFIED) {
+      throw new NotFoundException('Vendor not found.');
+    }
+
+    const items = await this.prisma.portfolioItem.findMany({
+      where: { vendorId: vendor.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return items.map((item) => ({
+      id: item.id,
+      url: this.storage.buildPublicUrl(item.storageKey),
+      caption: item.caption ?? null,
+    }));
   }
 
   async discoverServices(
@@ -791,7 +825,12 @@ export class PublicCatalogService {
 
   private async listServiceReviews(
     serviceId: string,
-    options: { take: number; cursor?: string; rating?: number; withMedia?: boolean },
+    options: {
+      take: number;
+      cursor?: string;
+      rating?: number;
+      withMedia?: boolean;
+    },
   ): Promise<ServiceReview[]> {
     const reviews = await this.prisma.review.findMany({
       where: {
@@ -821,7 +860,8 @@ export class PublicCatalogService {
 
     return reviews.map((review) => {
       const fullName = review.customer.customerProfile?.fullName ?? null;
-      const name = fullName && fullName.trim().length > 0 ? fullName : 'Customer';
+      const name =
+        fullName && fullName.trim().length > 0 ? fullName : 'Customer';
       const initials = this.buildInitials(
         fullName ?? review.customer.email ?? 'C',
       );
@@ -839,7 +879,10 @@ export class PublicCatalogService {
           initials,
         },
         vendorReply: review.reply
-          ? { message: review.reply, repliedAt: review.repliedAt?.toISOString() ?? null }
+          ? {
+              message: review.reply,
+              repliedAt: review.repliedAt?.toISOString() ?? null,
+            }
           : null,
       };
     });

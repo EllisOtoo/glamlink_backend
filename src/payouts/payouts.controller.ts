@@ -43,7 +43,10 @@ export class PayoutsController {
   }
 
   @Post('request')
-  async requestPayout(@CurrentUser() user: User, @Body() dto: CreatePayoutRequestDto) {
+  async requestPayout(
+    @CurrentUser() user: User,
+    @Body() dto: CreatePayoutRequestDto,
+  ) {
     return this.payoutsService.createPayoutRequest(
       user.id,
       dto.amountPesewas,
@@ -66,7 +69,10 @@ export class PayoutsController {
 
   // Payout Method Management
   @Post('methods')
-  async addMethod(@CurrentUser() user: User, @Body() dto: CreatePayoutMethodDto) {
+  async addMethod(
+    @CurrentUser() user: User,
+    @Body() dto: CreatePayoutMethodDto,
+  ) {
     return this.payoutsService.addPayoutMethod(user.id, dto);
   }
 

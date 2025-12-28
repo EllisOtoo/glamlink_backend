@@ -95,7 +95,9 @@ export class ServicesService {
         durationMinutes: dto.durationMinutes,
         bufferMinutes,
         isActive,
-        categoryId: dto.categoryId ? (await this.requireCategory(dto.categoryId)).id : null,
+        categoryId: dto.categoryId
+          ? (await this.requireCategory(dto.categoryId)).id
+          : null,
       },
     });
   }
@@ -154,7 +156,9 @@ export class ServicesService {
     }
 
     if (dto.categoryId !== undefined) {
-      data.categoryId = dto.categoryId ? (await this.requireCategory(dto.categoryId)).id : null;
+      data.categoryId = dto.categoryId
+        ? (await this.requireCategory(dto.categoryId)).id
+        : null;
     }
 
     return this.prisma.service.update({

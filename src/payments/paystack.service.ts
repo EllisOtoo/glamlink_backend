@@ -176,10 +176,7 @@ export class PaystackService {
         return;
       }
 
-      if (
-        data.reference &&
-        paymentIntent.providerRef !== data.reference
-      ) {
+      if (data.reference && paymentIntent.providerRef !== data.reference) {
         await tx.paymentIntent.update({
           where: { id: paymentIntent.id },
           data: { providerRef: data.reference },
@@ -274,8 +271,7 @@ export class PaystackService {
           where: { id: paymentIntent.giftCard.id },
           data: {
             status: GiftCardStatus.ACTIVE,
-            activatedAt:
-              paymentIntent.giftCard.activatedAt ?? new Date(),
+            activatedAt: paymentIntent.giftCard.activatedAt ?? new Date(),
             balancePesewas:
               existingBalance > 0
                 ? existingBalance
@@ -378,10 +374,7 @@ export class PaystackService {
         return;
       }
 
-      if (
-        data.reference &&
-        paymentIntent.providerRef !== data.reference
-      ) {
+      if (data.reference && paymentIntent.providerRef !== data.reference) {
         await tx.paymentIntent.update({
           where: { id: paymentIntent.id },
           data: { providerRef: data.reference },
@@ -492,7 +485,10 @@ export class PaystackService {
           balancePesewas: 0,
         },
       });
-      return { booking: paymentIntent.booking ?? null, giftCardId: paymentIntent.giftCard.id };
+      return {
+        booking: paymentIntent.booking ?? null,
+        giftCardId: paymentIntent.giftCard.id,
+      };
     }
 
     return { booking: paymentIntent.booking ?? null };
@@ -512,11 +508,7 @@ export class PaystackService {
   private normalizeMetadata(
     metadata?: Record<string, unknown>,
   ): Record<string, unknown> {
-    if (
-      metadata &&
-      typeof metadata === 'object' &&
-      !Array.isArray(metadata)
-    ) {
+    if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
       return metadata;
     }
     return {};
@@ -537,9 +529,7 @@ export class PaystackService {
         ? metadata.paymentIntentId
         : null;
     const bookingId =
-      typeof metadata.bookingId === 'string'
-        ? metadata.bookingId
-        : null;
+      typeof metadata.bookingId === 'string' ? metadata.bookingId : null;
     const supplyOrderId =
       typeof metadata.orderId === 'string' ? metadata.orderId : null;
     const giftCardId =

@@ -512,6 +512,64 @@ export class BookingsService {
     };
   }
 
+  async getVendorDailyStats(
+    userId: string,
+    params: { startDate?: string; endDate?: string },
+  ) {
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('Vendor profile not found.');
+    }
+
+    const start = params.startDate
+      ? new Date(params.startDate)
+      : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const end = params.endDate ? new Date(params.endDate) : new Date();
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        vendorId: vendor.id,
+        status: BookingStatus.COMPLETED,
+        scheduledStart: {
+          gte: start,
+          lte: end,
+        },
+      },
+      select: {
+        scheduledStart: true,
+        pricePesewas: true,
+      },
+    });
+
+    const dailyData: Record<
+      string,
+      { date: string; earnings: number; count: number }
+    > = {};
+
+    // Fill in all days in range with 0s
+    const current = new Date(start);
+    while (current <= end) {
+      const d = current.toISOString().split('T')[0];
+      dailyData[d] = { date: d, earnings: 0, count: 0 };
+      current.setDate(current.getDate() + 1);
+    }
+
+    bookings.forEach((booking) => {
+      const d = booking.scheduledStart.toISOString().split('T')[0];
+      if (dailyData[d]) {
+        dailyData[d].earnings += booking.pricePesewas;
+        dailyData[d].count += 1;
+      }
+    });
+
+    return Object.values(dailyData).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+  }
+
   async listCustomerUpcomingBookings(userId: string, take = 10) {
     const limit = Math.min(Math.max(take, 1), 50);
     const now = new Date();

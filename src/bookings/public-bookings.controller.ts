@@ -41,10 +41,7 @@ export class PublicBookingsController {
     @Param('bookingId') bookingId: string,
     @Body() dto: CancelBookingDto,
   ) {
-    return this.bookingsService.cancelPendingBookingWithoutAuth(
-      bookingId,
-      dto,
-    );
+    return this.bookingsService.cancelPendingBookingWithoutAuth(bookingId, dto);
   }
 
   private async resolveAuthenticatedUser(

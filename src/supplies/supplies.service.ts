@@ -77,10 +77,8 @@ export class SuppliesService {
         contactEmail: dto.contactEmail?.trim(),
         phoneNumber: dto.phoneNumber?.trim(),
         serviceAreas: dto.serviceAreas ?? undefined,
-        priority:
-          typeof dto.priority === 'number' ? dto.priority : undefined,
-        isActive:
-          typeof dto.isActive === 'boolean' ? dto.isActive : undefined,
+        priority: typeof dto.priority === 'number' ? dto.priority : undefined,
+        isActive: typeof dto.isActive === 'boolean' ? dto.isActive : undefined,
       },
     });
   }
@@ -103,8 +101,7 @@ export class SuppliesService {
   async createProduct(dto: CreateProductDto) {
     await this.ensureSupplierExists(dto.supplierId);
     const price = this.buildPrice(dto.supplierCostCents, dto.markupPercent);
-    const inStock =
-      typeof dto.inStock === 'boolean' ? dto.inStock : true;
+    const inStock = typeof dto.inStock === 'boolean' ? dto.inStock : true;
 
     const product = await this.prisma.supplyProduct.create({
       data: {
@@ -142,8 +139,7 @@ export class SuppliesService {
     if (
       (dto.supplierCostCents !== undefined &&
         dto.markupPercent === undefined) ||
-      (dto.supplierCostCents === undefined &&
-        dto.markupPercent !== undefined)
+      (dto.supplierCostCents === undefined && dto.markupPercent !== undefined)
     ) {
       throw new BadRequestException(
         'supplierCostCents and markupPercent must be provided together.',
@@ -166,10 +162,8 @@ export class SuppliesService {
         mediaUrl: dto.mediaUrl ?? undefined,
         mediaStorageKey: dto.mediaStorageKey ?? undefined,
         attributes: dto.attributes ?? undefined,
-        isActive:
-          typeof dto.isActive === 'boolean' ? dto.isActive : undefined,
-        inStock:
-          typeof dto.inStock === 'boolean' ? dto.inStock : undefined,
+        isActive: typeof dto.isActive === 'boolean' ? dto.isActive : undefined,
+        inStock: typeof dto.inStock === 'boolean' ? dto.inStock : undefined,
         stockRefreshedAt:
           typeof dto.inStock === 'boolean' ? new Date() : undefined,
       },
@@ -179,10 +173,7 @@ export class SuppliesService {
       dto.supplierCostCents !== undefined &&
       dto.markupPercent !== undefined
     ) {
-      const price = this.buildPrice(
-        dto.supplierCostCents,
-        dto.markupPercent,
-      );
+      const price = this.buildPrice(dto.supplierCostCents, dto.markupPercent);
       await this.prisma.supplyPrice.create({
         data: { ...price, productId },
       });
@@ -209,8 +200,7 @@ export class SuppliesService {
       throw new NotFoundException('Product not found.');
     }
 
-    const extension =
-      dto.mimeType.split('/').pop()?.toLowerCase() ?? 'jpg';
+    const extension = dto.mimeType.split('/').pop()?.toLowerCase() ?? 'jpg';
     const key = `supplies/products/${productId}/${Date.now()}.${extension}`;
 
     return this.storage.createPresignedUpload({
@@ -223,10 +213,7 @@ export class SuppliesService {
     });
   }
 
-  async listCatalogForVendor(
-    userId: string,
-    query: CatalogQueryDto,
-  ) {
+  async listCatalogForVendor(userId: string, query: CatalogQueryDto) {
     const vendor = await this.requireVendor(userId);
     this.assertPilotAccess(vendor.id);
 
@@ -280,9 +267,7 @@ export class SuppliesService {
       throw new BadRequestException('supplierCostCents must be >= 0.');
     }
     if (markupPercent < 0 || markupPercent > 100) {
-      throw new BadRequestException(
-        'markupPercent must be between 0 and 100.',
-      );
+      throw new BadRequestException('markupPercent must be between 0 and 100.');
     }
     const markupBasisPoints = markupPercent * 100;
     const vendorPriceCents = Math.ceil(

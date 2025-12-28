@@ -83,6 +83,20 @@ export class BookingsController {
 
   @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
+  @Get('vendors/me/bookings/daily-stats')
+  async getVendorDailyBookingStats(
+    @CurrentUser() user: User,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.bookingsService.getVendorDailyStats(user.id, {
+      startDate,
+      endDate,
+    });
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
   @Post('vendors/me/bookings/:bookingId/complete')
   async markBookingComplete(
     @CurrentUser() user: User,

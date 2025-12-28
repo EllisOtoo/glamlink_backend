@@ -306,10 +306,7 @@ export class NotificationsService {
       return;
     }
 
-    const amount = this.formatCurrency(
-      payload.amountPesewas,
-      payload.currency,
-    );
+    const amount = this.formatCurrency(payload.amountPesewas, payload.currency);
     const vendor = payload.vendorName ?? 'your GlamLink vendor';
     const subject = 'Your GlamLink gift card is ready';
     const lines = [

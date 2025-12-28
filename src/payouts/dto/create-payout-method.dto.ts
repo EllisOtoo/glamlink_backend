@@ -1,4 +1,10 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { PayoutMethodType } from '@prisma/client';
 
 export class CreatePayoutMethodDto {
@@ -8,7 +14,7 @@ export class CreatePayoutMethodDto {
 
   @IsString()
   @IsNotEmpty()
-  accountName: String;
+  accountName: string;
 
   @IsBoolean()
   @IsOptional()

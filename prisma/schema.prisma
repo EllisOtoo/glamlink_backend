@@ -49,8 +49,22 @@ model Vendor {
   payoutMethods         VendorPayoutMethod[]
   walletTransactions    WalletTransaction[]
   payoutRequests        PayoutRequest[]
+  portfolio             PortfolioItem[]
 
   @@index([status])
+}
+
+model PortfolioItem {
+  id         String   @id @default(cuid())
+  vendorId   String
+  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  storageKey String
+  caption    String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([vendorId])
 }
 
 model User {

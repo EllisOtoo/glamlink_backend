@@ -1,11 +1,17 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, SupplyOrderStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
 import { PaystackService } from '../payments/paystack.service';
 import { CreateSupplyOrderDto } from './dto/create-supply-order.dto';
 
-const pilotEnabled = (process.env.SUPPLIES_PILOT_ENABLED ?? '').toLowerCase() === 'true';
+const pilotEnabled =
+  (process.env.SUPPLIES_PILOT_ENABLED ?? '').toLowerCase() === 'true';
 const pilotAllowlist = new Set(
   (process.env.SUPPLIES_PILOT_VENDOR_IDS ?? '')
     .split(',')
@@ -37,7 +43,9 @@ export class SupplyOrdersService {
     });
 
     if (products.length !== dto.items.length) {
-      throw new NotFoundException('One or more products not found or inactive.');
+      throw new NotFoundException(
+        'One or more products not found or inactive.',
+      );
     }
 
     const itemsData = dto.items.map((item) => {
@@ -188,7 +196,9 @@ export class SupplyOrdersService {
       throw new ForbiddenException('Supplies pilot is not enabled.');
     }
     if (pilotAllowlist.size > 0 && !pilotAllowlist.has(vendorId)) {
-      throw new ForbiddenException('Supplies pilot not enabled for this vendor.');
+      throw new ForbiddenException(
+        'Supplies pilot not enabled for this vendor.',
+      );
     }
   }
 }

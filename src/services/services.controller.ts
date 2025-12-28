@@ -30,7 +30,7 @@ import { StorageService } from '../storage/storage.service';
 
 @Controller('vendors/me/services')
 @UseGuards(SessionAuthGuard, RolesGuard, VerifiedVendorGuard)
-@Roles(UserRole.VENDOR)
+@Roles(UserRole.VENDOR, UserRole.CUSTOMER)
 export class VendorServicesController {
   constructor(
     private readonly servicesService: ServicesService,
@@ -174,7 +174,7 @@ export class VendorServicesController {
 
 @Controller('vendors/me/availability')
 @UseGuards(SessionAuthGuard, RolesGuard, VerifiedVendorGuard)
-@Roles(UserRole.VENDOR)
+@Roles(UserRole.VENDOR, UserRole.CUSTOMER)
 export class VendorAvailabilityController {
   constructor(private readonly servicesService: ServicesService) {}
 

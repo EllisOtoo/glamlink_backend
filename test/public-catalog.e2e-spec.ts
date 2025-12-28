@@ -75,9 +75,7 @@ describe('Public Catalog (e2e)', () => {
   });
 
   it('denies unauthenticated access to /public/catalog/services/me', async () => {
-    await request(httpServer)
-      .get('/public/catalog/services/me')
-      .expect(401);
+    await request(httpServer).get('/public/catalog/services/me').expect(401);
   });
 
   it('keeps the public discover endpoint showing all vendors to guests', async () => {

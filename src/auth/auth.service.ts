@@ -6,13 +6,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  Session,
-  User,
-  UserRole,
-  VendorStatus,
-} from '@prisma/client';
+import { Prisma, Session, User, UserRole, VendorStatus } from '@prisma/client';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { randomBytes, randomInt, createHash } from 'node:crypto';
 import { PrismaService } from '../prisma';
@@ -476,7 +470,9 @@ export class AuthService {
     return parsed;
   }
 
-  async getVendorContextByUserId(userId: string): Promise<VendorContext | null> {
+  async getVendorContextByUserId(
+    userId: string,
+  ): Promise<VendorContext | null> {
     return this.findVendorContext(this.prisma, userId);
   }
 
