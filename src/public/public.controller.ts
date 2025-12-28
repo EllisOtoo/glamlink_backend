@@ -53,8 +53,12 @@ export class PublicCatalogController {
   }
 
   @Get('vendors/:handle/portfolio')
-  vendorPortfolioByHandle(@Param('handle') handle: string) {
-    return this.catalog.getVendorPortfolio(handle);
+  vendorPortfolioByHandle(
+    @Param('handle') handle: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+    return this.catalog.getVendorPortfolio(handle, parsedLimit);
   }
 
   @Get('services/discover')

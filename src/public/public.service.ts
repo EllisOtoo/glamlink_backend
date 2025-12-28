@@ -371,7 +371,7 @@ export class PublicCatalogService {
     };
   }
 
-  async getVendorPortfolio(handle: string): Promise<PortfolioItemSummary[]> {
+  async getVendorPortfolio(handle: string, limit?: number): Promise<PortfolioItemSummary[]> {
     const normalizedHandle = this.normalizeHandle(handle);
 
     if (!normalizedHandle) {
@@ -389,7 +389,8 @@ export class PublicCatalogService {
 
     const items = await this.prisma.portfolioItem.findMany({
       where: { vendorId: vendor.id },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: { createdAt: 'desc' },
+      take: limit && limit > 0 ? limit : undefined,
     });
 
     return items.map((item) => ({
