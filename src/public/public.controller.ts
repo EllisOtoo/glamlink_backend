@@ -106,4 +106,12 @@ export class PublicCatalogController {
   ): Promise<ServiceReviewsResponse> {
     return this.catalog.getServiceReviews(serviceId, query);
   }
+
+  @Get('vendors/:handle/reviews')
+  vendorReviews(
+    @Param('handle') handle: string,
+    @Query() query: ServiceReviewsQueryDto,
+  ): Promise<ServiceReviewsResponse> {
+    return this.catalog.getVendorReviews(handle, query);
+  }
 }

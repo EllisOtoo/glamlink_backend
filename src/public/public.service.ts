@@ -795,6 +795,138 @@ export class PublicCatalogService {
     };
   }
 
+  async getVendorReviews(
+    handle: string,
+    query: ServiceReviewsQueryDto,
+  ): Promise<ServiceReviewsResponse> {
+    const normalizedHandle = this.normalizeHandle(handle);
+
+    if (!normalizedHandle) {
+      throw new NotFoundException('Vendor not found.');
+    }
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { handle: normalizedHandle },
+      select: { id: true, status: true },
+    });
+
+    if (!vendor || vendor.status !== VendorStatus.VERIFIED) {
+      throw new NotFoundException('Vendor not found.');
+    }
+
+    const ratingSummary = await this.getVendorRatingSummary(vendor.id);
+    const take = Math.min(Math.max(query.limit ?? 10, 1), 50);
+    const reviews = await this.listVendorReviews(vendor.id, {
+      take: take + 1,
+      cursor: query.cursor,
+      rating: query.rating,
+      withMedia: query.withMedia,
+    });
+
+    const hasNext = reviews.length > take;
+    const sliced = hasNext ? reviews.slice(0, take) : reviews;
+
+    return {
+      reviews: sliced,
+      nextCursor: hasNext ? reviews[take].id : null,
+      rating: ratingSummary,
+    };
+  }
+
+  private async getVendorRatingSummary(vendorId: string) {
+    const histogram = [0, 0, 0, 0, 0];
+
+    const grouped = await this.prisma.review.groupBy({
+      by: ['rating'],
+      where: { vendorId },
+      _count: { rating: true },
+    });
+
+    grouped.forEach((item) => {
+      const index = item.rating - 1;
+      if (index >= 0 && index < histogram.length) {
+        histogram[index] = item._count.rating;
+      }
+    });
+
+    const aggregate = await this.prisma.review.aggregate({
+      where: { vendorId },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    return {
+      average: aggregate._avg.rating ?? null,
+      count: aggregate._count.rating ?? 0,
+      histogram,
+    };
+  }
+
+  private async listVendorReviews(
+    vendorId: string,
+    options: {
+      take: number;
+      cursor?: string;
+      rating?: number;
+      withMedia?: boolean;
+    },
+  ): Promise<ServiceReview[]> {
+    const reviews = await this.prisma.review.findMany({
+      where: {
+        vendorId,
+        rating: options.rating ?? undefined,
+        mediaStorageKeys: options.withMedia ? { isEmpty: false } : undefined,
+      },
+      include: {
+        booking: {
+          select: {
+            scheduledStart: true,
+            service: { select: { name: true } },
+          },
+        },
+        customer: {
+          select: {
+            email: true,
+            customerProfile: { select: { fullName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: options.take,
+      cursor: options.cursor ? { id: options.cursor } : undefined,
+      skip: options.cursor ? 1 : undefined,
+    });
+
+    return reviews.map((review) => {
+      const fullName = review.customer.customerProfile?.fullName ?? null;
+      const name =
+        fullName && fullName.trim().length > 0 ? fullName : 'Customer';
+      const initials = this.buildInitials(
+        fullName ?? review.customer.email ?? 'C',
+      );
+
+      return {
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment ?? null,
+        createdAt: review.createdAt.toISOString(),
+        imageUrls: review.mediaStorageKeys.map((key) =>
+          this.storage.buildPublicUrl(key),
+        ),
+        author: {
+          name,
+          initials,
+        },
+        vendorReply: review.reply
+          ? {
+              message: review.reply,
+              repliedAt: review.repliedAt?.toISOString() ?? null,
+            }
+          : null,
+      };
+    });
+  }
+
   private async getServiceRatingSummary(serviceId: string) {
     const histogram = [0, 0, 0, 0, 0];
 
