@@ -208,7 +208,7 @@ export class PublicCatalogService {
     const markupBps = await this.platformSettings.getServiceMarkupBps();
     const vendors = await this.prisma.vendor.findMany({
       where: {
-        status: VendorStatus.VERIFIED,
+        status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
         services: {
           some: { isActive: true },
         },
@@ -261,7 +261,7 @@ export class PublicCatalogService {
     const markupBps = await this.platformSettings.getServiceMarkupBps();
     const vendors = await this.prisma.vendor.findMany({
       where: {
-        status: VendorStatus.VERIFIED,
+        status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
         handle: {
           contains: normalizedHandle,
           mode: 'insensitive',
@@ -333,7 +333,7 @@ export class PublicCatalogService {
       },
     });
 
-    if (!vendor || vendor.status !== VendorStatus.VERIFIED) {
+    if (!vendor || (vendor.status !== VendorStatus.VERIFIED && vendor.status !== VendorStatus.DRAFT && vendor.status !== VendorStatus.PENDING_REVIEW)) {
       throw new NotFoundException('Vendor not found.');
     }
 
@@ -385,7 +385,7 @@ export class PublicCatalogService {
       select: { id: true, status: true },
     });
 
-    if (!vendor || vendor.status !== VendorStatus.VERIFIED) {
+    if (!vendor || (vendor.status !== VendorStatus.VERIFIED && vendor.status !== VendorStatus.DRAFT && vendor.status !== VendorStatus.PENDING_REVIEW)) {
       throw new NotFoundException('Vendor not found.');
     }
 
@@ -408,7 +408,7 @@ export class PublicCatalogService {
     query: DiscoverServicesQueryDto,
   ): Promise<ServiceSummary[]> {
     const vendorWhere: Prisma.VendorWhereInput = {
-      status: VendorStatus.VERIFIED,
+      status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
     };
 
     if (query.location) {
@@ -475,7 +475,7 @@ export class PublicCatalogService {
     const where: Prisma.ServiceWhereInput = {
       isActive: true,
       vendor: {
-        status: VendorStatus.VERIFIED,
+        status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
         latitude: { not: null },
         longitude: { not: null },
       },
@@ -701,7 +701,7 @@ export class PublicCatalogService {
       throw new NotFoundException('Service not found.');
     }
 
-    if (service.vendor.status !== VendorStatus.VERIFIED) {
+    if (service.vendor.status !== VendorStatus.VERIFIED && service.vendor.status !== VendorStatus.DRAFT && service.vendor.status !== VendorStatus.PENDING_REVIEW) {
       throw new BadRequestException('Vendor is not available for booking.');
     }
 
@@ -743,7 +743,7 @@ export class PublicCatalogService {
       where: {
         id: serviceId,
         isActive: true,
-        vendor: { status: VendorStatus.VERIFIED },
+        vendor: { status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] } },
       },
       select: { id: true, vendorId: true },
     });
@@ -771,7 +771,7 @@ export class PublicCatalogService {
       where: {
         id: serviceId,
         isActive: true,
-        vendor: { status: VendorStatus.VERIFIED },
+        vendor: { status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] } },
       },
       select: { id: true },
     });

@@ -28,7 +28,8 @@ export class VerifiedVendorGuard implements CanActivate {
     if (
       !vendor ||
       (vendor.status !== VendorStatus.VERIFIED &&
-        vendor.status !== VendorStatus.DRAFT)
+        vendor.status !== VendorStatus.DRAFT &&
+        vendor.status !== VendorStatus.PENDING_REVIEW)
     ) {
       throw new ForbiddenException(
         'Vendor account must be verified to access this resource.',

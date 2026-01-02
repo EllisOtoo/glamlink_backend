@@ -1017,7 +1017,11 @@ export class BookingsService {
       throw new BadRequestException('Service vendor is missing.');
     }
 
-    if (service.vendor.status !== VendorStatus.VERIFIED) {
+    if (
+      service.vendor.status !== VendorStatus.VERIFIED &&
+      service.vendor.status !== VendorStatus.DRAFT &&
+      service.vendor.status !== VendorStatus.PENDING_REVIEW
+    ) {
       throw new BadRequestException(
         'Vendor must be verified before accepting bookings.',
       );
