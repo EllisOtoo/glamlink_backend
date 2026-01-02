@@ -169,7 +169,7 @@ export class VendorsService {
           );
         }
 
-        return tx.vendor.create({
+        const newVendor = await tx.vendor.create({
           data: {
             userId,
             businessName: payload.businessName,
@@ -198,6 +198,15 @@ export class VendorsService {
                 : 0,
           },
         });
+
+        // Automatically promote the user to VENDOR role so they pass RBAC checks
+        // for vendor management endpoints immediately.
+        await tx.user.update({
+          where: { id: userId },
+          data: { role: 'VENDOR' },
+        });
+
+        return newVendor;
       }
 
       return tx.vendor.update({

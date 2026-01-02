@@ -14,7 +14,7 @@ export class BookingReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.CUSTOMER)
+  @Roles(UserRole.CUSTOMER, UserRole.VENDOR)
   @Post(':bookingId/review')
   async createReview(
     @CurrentUser() user: User,
@@ -25,7 +25,7 @@ export class BookingReviewsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
-  @Roles(UserRole.CUSTOMER)
+  @Roles(UserRole.CUSTOMER, UserRole.VENDOR)
   @Post(':bookingId/review/upload-url')
   async requestReviewMediaUpload(
     @CurrentUser() user: User,
