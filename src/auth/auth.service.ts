@@ -90,86 +90,84 @@ export class AuthService {
     const sanitizedCode = this.sanitizeOtpCode(params.code);
     const requestedRole = params.requestedRole ?? UserRole.CUSTOMER;
 
-    return this.prisma.$transaction(async (tx) => {
-      const otpRecord = await tx.emailOtp.findFirst({
-        where: {
-          email: normalizedEmail,
-          consumedAt: null,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (!otpRecord) {
-        throw new UnauthorizedException('Invalid or expired code.');
-      }
-
-      if (otpRecord.expiresAt.getTime() <= Date.now()) {
-        await tx.emailOtp.update({
-          where: { id: otpRecord.id },
-          data: { consumedAt: new Date() },
+    return this.prisma.$transaction(
+      async (tx) => {
+        const otpRecord = await tx.emailOtp.findFirst({
+          where: {
+            email: normalizedEmail,
+            consumedAt: null,
+          },
+          orderBy: { createdAt: 'desc' },
         });
-        throw new UnauthorizedException('Invalid or expired code.');
-      }
 
-      if (otpRecord.attemptCount >= OTP_MAX_ATTEMPTS) {
-        await tx.emailOtp.update({
-          where: { id: otpRecord.id },
-          data: { consumedAt: new Date() },
-        });
-        throw new UnauthorizedException(
-          'Too many attempts. Request a new code.',
+        if (!otpRecord) {
+          throw new UnauthorizedException('Invalid or expired code.');
+        }
+
+        if (otpRecord.expiresAt.getTime() <= Date.now()) {
+          await tx.emailOtp.update({
+            where: { id: otpRecord.id },
+            data: { consumedAt: new Date() },
+          });
+          throw new UnauthorizedException('Invalid or expired code.');
+        }
+
+        if (otpRecord.attemptCount >= OTP_MAX_ATTEMPTS) {
+          await tx.emailOtp.update({
+            where: { id: otpRecord.id },
+            data: { consumedAt: new Date() },
+          });
+          throw new UnauthorizedException(
+            'Too many attempts. Request a new code.',
+          );
+        }
+
+        const codeMatches = otpRecord.codeHash === this.hashString(sanitizedCode);
+
+        if (!codeMatches) {
+          await tx.emailOtp.update({
+            where: { id: otpRecord.id },
+            data: { attemptCount: { increment: 1 } },
+          });
+          throw new UnauthorizedException('Invalid or expired code.');
+        }
+
+        const { user, created } = await this.upsertUserInTransaction(
+          tx,
+          normalizedEmail,
+          requestedRole,
         );
-      }
 
-      const codeMatches = otpRecord.codeHash === this.hashString(sanitizedCode);
-
-      if (!codeMatches) {
         await tx.emailOtp.update({
           where: { id: otpRecord.id },
-          data: { attemptCount: { increment: 1 } },
+          data: {
+            consumedAt: new Date(),
+            attemptCount: { increment: 1 },
+            userId: user.id,
+          },
         });
-        throw new UnauthorizedException('Invalid or expired code.');
-      }
 
-      const { user, created } = await this.upsertUserInTransaction(
-        tx,
-        normalizedEmail,
-        requestedRole,
-      );
-
-      await tx.emailOtp.update({
-        where: { id: otpRecord.id },
-        data: {
-          consumedAt: new Date(),
-          attemptCount: { increment: 1 },
+        const session = await this.createSession(tx, {
           userId: user.id,
-        },
-      });
+          metadata: params.metadata,
+        });
 
-      await tx.user.update({
-        where: { id: user.id },
-        data: { lastSignedInAt: new Date() },
-      });
+        const vendor = await this.findVendorContext(tx, user.id);
 
-      const session = await this.createSession(tx, {
-        userId: user.id,
-        metadata: params.metadata,
-      });
+        if (created) {
+          this.logger.log(`Created new user ${user.id} (${user.email})`);
+        }
 
-      const vendor = await this.findVendorContext(tx, user.id);
-
-      if (created) {
-        this.logger.log(`Created new user ${user.id} (${user.email})`);
-      }
-
-      return {
-        token: session.plainToken,
-        expiresAt: session.record.expiresAt,
-        session: session.record,
-        user,
-        vendor,
-      };
-    });
+        return {
+          token: session.plainToken,
+          expiresAt: session.record.expiresAt,
+          session: session.record,
+          user,
+          vendor,
+        };
+      },
+      { timeout: 20000 },
+    );
   }
 
   async validateSessionToken(token: string): Promise<{
@@ -271,39 +269,40 @@ export class AuthService {
     const normalizedEmail = this.normalizeEmail(email);
     const requestedRole = params.requestedRole ?? UserRole.CUSTOMER;
 
-    return this.prisma.$transaction(async (tx) => {
-      const { user, created } = await this.upsertFirebaseUserInTransaction(tx, {
-        email: normalizedEmail,
-        firebaseUid: decodedToken.uid,
-        requestedRole,
-      });
-
-      await tx.user.update({
-        where: { id: user.id },
-        data: { lastSignedInAt: new Date() },
-      });
-
-      const session = await this.createSession(tx, {
-        userId: user.id,
-        metadata: params.metadata,
-      });
-
-      const vendor = await this.findVendorContext(tx, user.id);
-
-      if (created) {
-        this.logger.log(
-          `Created new Firebase-backed user ${user.id} (${user.email})`,
+    return this.prisma.$transaction(
+      async (tx) => {
+        const { user, created } = await this.upsertFirebaseUserInTransaction(
+          tx,
+          {
+            email: normalizedEmail,
+            firebaseUid: decodedToken.uid,
+            requestedRole,
+          },
         );
-      }
 
-      return {
-        token: session.plainToken,
-        expiresAt: session.record.expiresAt,
-        session: session.record,
-        user,
-        vendor,
-      };
-    });
+        const session = await this.createSession(tx, {
+          userId: user.id,
+          metadata: params.metadata,
+        });
+
+        const vendor = await this.findVendorContext(tx, user.id);
+
+        if (created) {
+          this.logger.log(
+            `Created new Firebase-backed user ${user.id} (${user.email})`,
+          );
+        }
+
+        return {
+          token: session.plainToken,
+          expiresAt: session.record.expiresAt,
+          session: session.record,
+          user,
+          vendor,
+        };
+      },
+      { timeout: 20000 },
+    );
   }
 
   async registerWithFirebaseIdToken(params: {
@@ -540,7 +539,12 @@ export class AuthService {
         );
       }
 
-      return { user: existing, created: false };
+      const updated = await tx.user.update({
+        where: { id: existing.id },
+        data: { lastSignedInAt: new Date() },
+      });
+
+      return { user: updated, created: false };
     }
 
     const roleToAssign =
@@ -550,6 +554,7 @@ export class AuthService {
       data: {
         email,
         role: roleToAssign,
+        lastSignedInAt: new Date(),
       },
     });
 
@@ -569,16 +574,18 @@ export class AuthService {
     });
 
     if (existingByUid) {
-      if (existingByUid.email !== params.email) {
-        const updated = await tx.user.update({
-          where: { id: existingByUid.id },
-          data: { email: params.email },
-        });
+      const data: Prisma.UserUpdateInput = { lastSignedInAt: new Date() };
 
-        return { user: updated, created: false };
+      if (existingByUid.email !== params.email) {
+        data.email = params.email;
       }
 
-      return { user: existingByUid, created: false };
+      const updated = await tx.user.update({
+        where: { id: existingByUid.id },
+        data,
+      });
+
+      return { user: updated, created: false };
     }
 
     const existingByEmail = await tx.user.findUnique({
@@ -586,6 +593,8 @@ export class AuthService {
     });
 
     if (existingByEmail) {
+      const data: Prisma.UserUpdateInput = { lastSignedInAt: new Date() };
+
       if (
         existingByEmail.firebaseUid &&
         existingByEmail.firebaseUid !== params.firebaseUid
@@ -593,12 +602,13 @@ export class AuthService {
         this.logger.warn(
           `Attempt to relink Firebase UID ${params.firebaseUid} to user ${existingByEmail.id} already linked to ${existingByEmail.firebaseUid}. Keeping existing mapping.`,
         );
-        return { user: existingByEmail, created: false };
+      } else {
+        data.firebaseUid = params.firebaseUid;
       }
 
       const updated = await tx.user.update({
         where: { id: existingByEmail.id },
-        data: { firebaseUid: params.firebaseUid },
+        data,
       });
 
       return { user: updated, created: false };
@@ -614,6 +624,7 @@ export class AuthService {
         email: params.email,
         firebaseUid: params.firebaseUid,
         role: roleToAssign,
+        lastSignedInAt: new Date(),
       },
     });
 
