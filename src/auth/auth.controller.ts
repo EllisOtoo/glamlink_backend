@@ -175,9 +175,12 @@ export class AuthController {
     },
   ) {
     const vendor = await this.authService.getVendorContextByUserId(user.id);
+    const customerProfile = await this.authService.getCustomerProfile(user.id);
+    
     return {
       ...user,
       vendor: this.mapVendor(vendor),
+      customerProfile,
     };
   }
 

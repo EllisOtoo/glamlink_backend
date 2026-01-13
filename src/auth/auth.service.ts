@@ -499,6 +499,22 @@ export class AuthService {
     };
   }
 
+  async getCustomerProfile(userId: string): Promise<{ fullName: string | null; phoneNumber: string | null } | null> {
+    const profile = await this.prisma.customerProfile.findUnique({
+      where: { userId },
+      select: {
+        fullName: true,
+        phoneNumber: true,
+      },
+    });
+
+    if (!profile) {
+      return null;
+    }
+
+    return profile;
+  }
+
   private sanitizeOtpCode(code: string): string {
     if (!code) {
       throw new BadRequestException('OTP code is required.');
