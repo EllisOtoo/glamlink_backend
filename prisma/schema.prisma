@@ -759,3 +759,26 @@ enum PayoutStatus {
   REJECTED
   FAILED
 }
+
+model Region {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  cities    City[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  regionId  String
+  region    Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, regionId])
+  @@index([regionId])
+  @@index([name])
+}

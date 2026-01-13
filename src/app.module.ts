@@ -19,6 +19,7 @@ import { SupplyOrdersModule } from './supply-orders/supply-orders.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { GiftCardsModule } from './gift-cards/gift-cards.module';
 import { PayoutsModule } from './payouts/payouts.module';
+import { LocationsModule } from './locations/locations.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PayoutsModule } from './payouts/payouts.module';
     PlatformSettingsModule,
     GiftCardsModule,
     PayoutsModule,
+    LocationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

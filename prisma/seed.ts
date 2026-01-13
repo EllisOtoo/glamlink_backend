@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const prisma = new PrismaClient();
 
@@ -350,6 +352,51 @@ async function upsertProduct(seed: ProductSeed, supplierId: string) {
   });
 }
 
+async function upsertLocationData() {
+  const dataDir = path.join(__dirname, 'data', 'ghana-locations');
+  const files = fs.readdirSync(dataDir);
+
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+
+    const filePath = path.join(dataDir, file);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(content);
+
+    const regionName = data.region;
+    const cities = data.cities;
+
+    if (!regionName || !cities) {
+      console.warn(`Skipping file ${file}: missing 'region' or 'cities' key.`);
+      continue;
+    }
+
+    console.log(`Seeding region: ${regionName} (${cities.length} cities) from ${file}`);
+
+    const region = await prisma.region.upsert({
+      where: { name: regionName },
+      update: {},
+      create: { name: regionName },
+    });
+
+    for (const cityName of cities) {
+      await prisma.city.upsert({
+        where: {
+          name_regionId: {
+            name: cityName,
+            regionId: region.id,
+          },
+        },
+        update: {},
+        create: {
+          name: cityName,
+          regionId: region.id,
+        },
+      });
+    }
+  }
+}
+
 function buildPrice(supplierCostCents: number, markupPercent: number) {
   const markupBasisPoints = Math.round(markupPercent * 100);
   const vendorPriceCents = Math.ceil(
@@ -366,6 +413,9 @@ function buildPrice(supplierCostCents: number, markupPercent: number) {
 }
 
 async function main() {
+  console.log('Seeding locations...');
+  await upsertLocationData();
+
   console.log('Seeding suppliers and products for supplies pilot...');
   const supplierMap = new Map<string, string>();
 
