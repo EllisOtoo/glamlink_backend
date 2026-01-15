@@ -23,6 +23,7 @@ import { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
 import { ConfirmLogoDto } from './dto/confirm-logo.dto';
 import { RequestPortfolioUploadUrlDto } from './dto/request-portfolio-upload-url.dto';
 import { ConfirmPortfolioUploadDto } from './dto/confirm-portfolio-upload.dto';
+import { UpdatePortfolioItemDto } from './dto/update-portfolio-item.dto';
 import { StorageService } from '../storage/storage.service';
 import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
 import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
@@ -237,6 +238,23 @@ export class VendorsController {
     @Body() dto: ConfirmPortfolioUploadDto,
   ) {
     const item = await this.vendorsService.confirmPortfolioUpload(user.id, dto);
+    return {
+      ...item,
+      url: item.storageKey
+        ? this.storage.buildPublicUrl(item.storageKey)
+        : (item.externalUrl ?? ''),
+    };
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Put('vendors/me/portfolio/:itemId')
+  async updatePortfolioItem(
+    @CurrentUser() user: User,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdatePortfolioItemDto,
+  ) {
+    const item = await this.vendorsService.updatePortfolioItem(user.id, itemId, dto);
     return {
       ...item,
       url: item.storageKey

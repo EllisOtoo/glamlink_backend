@@ -98,6 +98,7 @@ export class ServicesService {
         categoryId: dto.categoryId
           ? (await this.requireCategory(dto.categoryId)).id
           : null,
+        includes: dto.includes ?? [],
       },
     });
   }
@@ -123,6 +124,7 @@ export class ServicesService {
       bufferMinutes?: number;
       isActive?: boolean;
       categoryId?: string | null;
+      includes?: string[];
     } = {};
 
     if (typeof dto.name === 'string') {
@@ -159,6 +161,10 @@ export class ServicesService {
       data.categoryId = dto.categoryId
         ? (await this.requireCategory(dto.categoryId)).id
         : null;
+    }
+
+    if (dto.includes !== undefined) {
+      data.includes = dto.includes;
     }
 
     return this.prisma.service.update({

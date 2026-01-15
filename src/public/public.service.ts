@@ -32,6 +32,14 @@ export interface VendorSummary {
   latitude: number | null;
   longitude: number | null;
   serviceRadiusKm: number | null;
+  professionalTitle: string | null;
+  yearsExperience: number | null;
+  isVerified: boolean;
+  instagramHandle: string | null;
+  tiktokHandle: string | null;
+  facebookUrl: string | null;
+  xHandle: string | null;
+  youtubeChannel: string | null;
 }
 
 export interface ServiceImageSummary {
@@ -56,6 +64,7 @@ export interface ServiceSummary {
   durationMinutes: number;
   vendor: VendorSummary;
   images: ServiceImageSummary[];
+  includes: string[];
   createdAt: Date;
 }
 
@@ -147,6 +156,14 @@ type VendorSummarySource = {
   latitude?: number | null;
   longitude?: number | null;
   serviceRadiusKm?: number | null;
+  professionalTitle: string | null;
+  yearsExperience: number | null;
+  instagramHandle: string | null;
+  tiktokHandle: string | null;
+  facebookUrl: string | null;
+  xHandle: string | null;
+  youtubeChannel: string | null;
+  status: VendorStatus;
   services: { priceCents: number }[];
 };
 
@@ -164,6 +181,13 @@ const SERVICE_INCLUDE = {
       latitude: true,
       longitude: true,
       serviceRadiusKm: true,
+      professionalTitle: true,
+      yearsExperience: true,
+      instagramHandle: true,
+      tiktokHandle: true,
+      facebookUrl: true,
+      xHandle: true,
+      youtubeChannel: true,
       services: {
         where: { isActive: true },
         select: { priceCents: true },
@@ -223,11 +247,19 @@ export class PublicCatalogService {
         handle: true,
         locationArea: true,
         bio: true,
+        status: true,
         logoStorageKey: true,
         logoVersion: true,
         latitude: true,
         longitude: true,
         serviceRadiusKm: true,
+        professionalTitle: true,
+        yearsExperience: true,
+        instagramHandle: true,
+        tiktokHandle: true,
+        facebookUrl: true,
+        xHandle: true,
+        youtubeChannel: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -280,11 +312,19 @@ export class PublicCatalogService {
         handle: true,
         locationArea: true,
         bio: true,
+        status: true,
         logoStorageKey: true,
         logoVersion: true,
         latitude: true,
         longitude: true,
         serviceRadiusKm: true,
+        professionalTitle: true,
+        yearsExperience: true,
+        instagramHandle: true,
+        tiktokHandle: true,
+        facebookUrl: true,
+        xHandle: true,
+        youtubeChannel: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -328,6 +368,13 @@ export class PublicCatalogService {
         latitude: true,
         longitude: true,
         serviceRadiusKm: true,
+        professionalTitle: true,
+        yearsExperience: true,
+        instagramHandle: true,
+        tiktokHandle: true,
+        facebookUrl: true,
+        xHandle: true,
+        youtubeChannel: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -633,6 +680,7 @@ export class PublicCatalogService {
           Math.floor(image.updatedAt.getTime() / 1000),
         ),
       })),
+      includes: service.includes,
     };
   }
 
@@ -1107,6 +1155,14 @@ export class PublicCatalogService {
       latitude: vendor.latitude ?? null,
       longitude: vendor.longitude ?? null,
       serviceRadiusKm: vendor.serviceRadiusKm ?? null,
+      professionalTitle: vendor.professionalTitle ?? null,
+      yearsExperience: vendor.yearsExperience ?? null,
+      isVerified: vendor.status === VendorStatus.VERIFIED,
+      instagramHandle: vendor.instagramHandle ?? null,
+      tiktokHandle: vendor.tiktokHandle ?? null,
+      facebookUrl: vendor.facebookUrl ?? null,
+      xHandle: vendor.xHandle ?? null,
+      youtubeChannel: vendor.youtubeChannel ?? null,
     };
   }
 

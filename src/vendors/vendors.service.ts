@@ -34,6 +34,8 @@ import { CreateSeatDto } from './dto/create-seat.dto';
 import { UpdateSeatDto } from './dto/update-seat.dto';
 import { RequestPortfolioUploadUrlDto } from './dto/request-portfolio-upload-url.dto';
 import { ConfirmPortfolioUploadDto } from './dto/confirm-portfolio-upload.dto';
+import { UpdatePortfolioItemDto } from './dto/update-portfolio-item.dto';
+
 
 export interface VendorProfileResult extends Vendor {
   documents: KycDocument[];
@@ -109,7 +111,13 @@ export class VendorsService {
       bio?: string;
       locationArea?: string;
       instagramHandle?: string;
-      websiteUrl?: string;
+      tiktokHandle?: string;
+      facebookUrl?: string;
+      xHandle?: string;
+      youtubeChannel?: string;
+      professionalTitle?: string;
+      yearsExperience?: number;
+      websiteUrl?: string | null;
       latitude?: number;
       longitude?: number;
       serviceRadiusKm?: number;
@@ -146,6 +154,12 @@ export class VendorsService {
       bio: payload.bio,
       locationArea: payload.locationArea,
       instagramHandle: payload.instagramHandle,
+      tiktokHandle: payload.tiktokHandle,
+      facebookUrl: payload.facebookUrl,
+      xHandle: payload.xHandle,
+      youtubeChannel: payload.youtubeChannel,
+      professionalTitle: payload.professionalTitle,
+      yearsExperience: payload.yearsExperience,
       websiteUrl: payload.websiteUrl,
       latitude:
         typeof payload.latitude === 'number' ? payload.latitude : undefined,
@@ -183,6 +197,12 @@ export class VendorsService {
             bio: payload.bio,
             locationArea: payload.locationArea,
             instagramHandle: payload.instagramHandle,
+            tiktokHandle: payload.tiktokHandle,
+            facebookUrl: payload.facebookUrl,
+            xHandle: payload.xHandle,
+            youtubeChannel: payload.youtubeChannel,
+            professionalTitle: payload.professionalTitle,
+            yearsExperience: payload.yearsExperience,
             websiteUrl: payload.websiteUrl,
             latitude:
               typeof payload.latitude === 'number'
@@ -894,6 +914,20 @@ export class VendorsService {
     return this.prisma.portfolioItem.findMany({
       where: { vendorId },
       orderBy: { sortOrder: 'asc' },
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                priceCents: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
@@ -938,6 +972,23 @@ export class VendorsService {
       );
     }
 
+    // Validate service IDs if provided
+    if (payload.serviceIds && payload.serviceIds.length > 0) {
+      const services = await this.prisma.service.findMany({
+        where: {
+          id: { in: payload.serviceIds },
+          vendorId: vendor.id,
+        },
+        select: { id: true },
+      });
+
+      if (services.length !== payload.serviceIds.length) {
+        throw new BadRequestException(
+          'One or more service IDs are invalid or do not belong to this vendor.',
+        );
+      }
+    }
+
     // Get current max sort order
     const maxSortItem = await this.prisma.portfolioItem.findFirst({
       where: { vendorId: vendor.id },
@@ -945,6 +996,7 @@ export class VendorsService {
     });
     const nextSortOrder = (maxSortItem?.sortOrder ?? -1) + 1;
 
+    // Create portfolio item with service assignments in a transaction
     return this.prisma.portfolioItem.create({
       data: {
         vendorId: vendor.id,
@@ -953,6 +1005,104 @@ export class VendorsService {
         externalUrl: payload.externalUrl,
         caption: payload.caption,
         sortOrder: nextSortOrder,
+        services: payload.serviceIds
+          ? {
+              create: payload.serviceIds.map((serviceId) => ({
+                serviceId,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                priceCents: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async updatePortfolioItem(
+    userId: string,
+    itemId: string,
+    payload: UpdatePortfolioItemDto,
+  ): Promise<PortfolioItem> {
+    const vendor = await this.requireVendor(userId);
+    
+    // Verify the item exists and belongs to this vendor
+    const item = await this.prisma.portfolioItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Portfolio item not found.');
+    }
+
+    if (item.vendorId !== vendor.id) {
+      throw new ForbiddenException(
+        'You do not have permission to update this item.',
+      );
+    }
+
+    // Validate service IDs if provided
+    if (payload.serviceIds && payload.serviceIds.length > 0) {
+      const services = await this.prisma.service.findMany({
+        where: {
+          id: { in: payload.serviceIds },
+          vendorId: vendor.id,
+        },
+        select: { id: true },
+      });
+
+      if (services.length !== payload.serviceIds.length) {
+        throw new BadRequestException(
+          'One or more service IDs are invalid or do not belong to this vendor.',
+        );
+      }
+    }
+
+    // Update portfolio item with service assignments
+    const servicesRelation =
+      payload.serviceIds !== undefined
+        ? {
+            deleteMany: {}, // Remove all existing service assignments
+            ...(payload.serviceIds.length > 0
+              ? {
+                  create: payload.serviceIds.map((serviceId) => ({
+                    serviceId,
+                  })),
+                }
+              : {}),
+          }
+        : undefined;
+
+    return this.prisma.portfolioItem.update({
+      where: { id: itemId },
+      data: {
+        caption: payload.caption,
+        services: servicesRelation,
+      },
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                priceCents: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
       },
     });
   }

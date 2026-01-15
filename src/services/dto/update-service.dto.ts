@@ -3,6 +3,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsArray,
   MaxLength,
   Min,
   MinLength,
@@ -42,4 +43,9 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  includes?: string[];
 }

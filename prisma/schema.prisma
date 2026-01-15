@@ -31,6 +31,12 @@ model Vendor {
   longitude             Float?
   serviceRadiusKm       Int?                   @default(15)
   onboardingStep        Int?                   @default(0)
+  professionalTitle     String?
+  yearsExperience       Int?
+  tiktokHandle          String?
+  facebookUrl           String?
+  xHandle               String?
+  youtubeChannel        String?
   availabilityOverrides AvailabilityOverride[]
   bookings              Booking[]
   calendarEntries       BookingCalendarEntry[]
@@ -54,16 +60,17 @@ model Vendor {
 }
 
 model PortfolioItem {
-  id          String            @id @default(cuid())
+  id          String                 @id @default(cuid())
   vendorId    String
   storageKey  String?
   caption     String?
-  sortOrder   Int               @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  sortOrder   Int                    @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
   externalUrl String?
-  type        PortfolioItemType @default(IMAGE)
-  vendor      Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  type        PortfolioItemType      @default(IMAGE)
+  vendor      Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  services    PortfolioItemService[]
 
   @@index([vendorId])
 }
@@ -170,6 +177,8 @@ model Service {
   vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   images          ServiceImage[]
   seatLinks       ServiceSeatService[]
+  includes        String[]               @default([])
+  portfolioItems  PortfolioItemService[]
 
   @@index([vendorId, isActive])
   @@index([categoryId])
@@ -414,6 +423,18 @@ model ServiceSeatService {
 
   @@id([serviceId, seatId])
   @@index([seatId])
+}
+
+model PortfolioItemService {
+  portfolioItemId String
+  serviceId       String
+  createdAt       DateTime      @default(now())
+  portfolioItem   PortfolioItem @relation(fields: [portfolioItemId], references: [id], onDelete: Cascade)
+  service         Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([portfolioItemId, serviceId])
+  @@index([serviceId])
+  @@index([portfolioItemId])
 }
 
 model PushToken {

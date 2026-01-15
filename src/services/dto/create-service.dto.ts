@@ -3,6 +3,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsArray,
   MaxLength,
   Min,
   MinLength,
@@ -39,4 +40,9 @@ export class CreateServiceDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  includes?: string[];
 }

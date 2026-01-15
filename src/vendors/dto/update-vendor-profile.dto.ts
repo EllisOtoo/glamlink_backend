@@ -10,6 +10,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 const HANDLE_REGEX = /^[a-z0-9](?:[a-z0-9-_]{1,28}[a-z0-9])?$/;
@@ -50,8 +51,41 @@ export class UpdateVendorProfileDto {
   instagramHandle?: string;
 
   @IsOptional()
-  @IsUrl()
-  websiteUrl?: string;
+  @IsString()
+  @MaxLength(50)
+  tiktokHandle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  facebookUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  xHandle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  youtubeChannel?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  professionalTitle?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  yearsExperience?: number;
+
+  @IsOptional()
+  @ValidateIf((o) => o.websiteUrl !== '')
+  @IsUrl({ require_tld: false, require_protocol: false }, { message: 'websiteUrl must be a valid URL address' })
+  websiteUrl?: string | null;
 
   @IsOptional()
   @Type(() => Number)
