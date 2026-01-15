@@ -66,6 +66,7 @@ export interface NearbyServiceSummary extends ServiceSummary {
 export interface SeatStaffSummary {
   id: string;
   name: string;
+  avatarUrl: string | null;
   bio: string | null;
 }
 
@@ -99,6 +100,7 @@ export interface ServiceAvailabilitySlot {
     capacity: number;
     bookedCount: number;
     available: boolean;
+    staff: SeatStaffSummary | null;
   }[];
 }
 
@@ -649,6 +651,7 @@ export class PublicCatalogService {
           select: {
             id: true,
             name: true,
+            avatarStorageKey: true,
             bio: true,
           },
         },
@@ -666,6 +669,9 @@ export class PublicCatalogService {
             id: seat.staff.id,
             name: seat.staff.name,
             bio: seat.staff.bio ?? null,
+            avatarUrl: seat.staff.avatarStorageKey
+              ? this.storage.buildPublicUrl(seat.staff.avatarStorageKey)
+              : null,
           }
         : null,
     }));
@@ -757,10 +763,27 @@ export class PublicCatalogService {
       throw new BadRequestException('Invalid start date.');
     }
 
-    return this.servicesService.listAvailabilitySlotsByService(service.id, {
+    const slots = await this.servicesService.listAvailabilitySlotsByService(service.id, {
       startDate: startDate.toISOString().slice(0, 10),
       days: 1,
     });
+
+    return slots.map((slot) => ({
+      ...slot,
+      seats: slot.seats.map((seat) => ({
+        ...seat,
+        staff: seat.staff
+          ? {
+              id: seat.staff.id,
+              name: seat.staff.name,
+              avatarUrl: seat.staff.avatarStorageKey
+                ? this.storage.buildPublicUrl(seat.staff.avatarStorageKey)
+                : null,
+              bio: null,
+            }
+          : null,
+      })),
+    }));
   }
 
   async getServiceReviews(

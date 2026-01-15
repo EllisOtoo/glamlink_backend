@@ -20,8 +20,13 @@ import {
   normalizeMimeType,
   resolveImageExtension,
 } from '../storage/media.helpers';
-import { MAX_VENDOR_LOGO_SIZE_BYTES } from './vendors.constants';
-import type { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
+import { 
+  MAX_KYC_DOCUMENT_SIZE_BYTES, 
+  MAX_STAFF_AVATAR_SIZE_BYTES, 
+  MAX_VENDOR_LOGO_SIZE_BYTES 
+} from './vendors.constants';
+import { RequestStaffAvatarUploadUrlDto } from './dto/request-staff-avatar-upload-url.dto';
+import { RequestLogoUploadUrlDto } from './dto/request-logo-upload-url.dto';
 import { RequestKycUploadUrlDto } from './dto/request-kyc-upload-url.dto';
 import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
 import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
@@ -29,7 +34,6 @@ import { CreateSeatDto } from './dto/create-seat.dto';
 import { UpdateSeatDto } from './dto/update-seat.dto';
 import { RequestPortfolioUploadUrlDto } from './dto/request-portfolio-upload-url.dto';
 import { ConfirmPortfolioUploadDto } from './dto/confirm-portfolio-upload.dto';
-import { MAX_KYC_DOCUMENT_SIZE_BYTES } from './vendors.constants';
 
 export interface VendorProfileResult extends Vendor {
   documents: KycDocument[];
@@ -376,20 +380,21 @@ export class VendorsService {
     });
   }
 
-  async listStaffMembers(userId: string): Promise<StaffMember[]> {
+  async listStaffMembers(userId: string): Promise<any[]> {
     const vendor = await this.requireVendor(userId);
-    return this.prisma.staffMember.findMany({
+    const staff = await this.prisma.staffMember.findMany({
       where: { vendorId: vendor.id },
       orderBy: { createdAt: 'asc' },
     });
+    return staff.map((s) => this.withStaffAvatarUrl(s));
   }
 
   async createStaffMember(
     userId: string,
     payload: CreateStaffMemberDto,
-  ): Promise<StaffMember> {
+  ): Promise<any> {
     const vendor = await this.requireVendor(userId);
-    return this.prisma.staffMember.create({
+    const staff = await this.prisma.staffMember.create({
       data: {
         vendorId: vendor.id,
         name: payload.name,
@@ -399,17 +404,18 @@ export class VendorsService {
         isActive: payload.isActive ?? true,
       },
     });
+    return this.withStaffAvatarUrl(staff);
   }
 
   async updateStaffMember(
     userId: string,
     staffId: string,
     payload: UpdateStaffMemberDto,
-  ): Promise<StaffMember> {
+  ): Promise<any> {
     const vendor = await this.requireVendor(userId);
     await this.ensureStaffBelongsToVendor(staffId, vendor.id);
 
-    return this.prisma.staffMember.update({
+    const staff = await this.prisma.staffMember.update({
       where: { id: staffId },
       data: {
         name: payload.name,
@@ -419,6 +425,7 @@ export class VendorsService {
         isActive: payload.isActive,
       },
     });
+    return this.withStaffAvatarUrl(staff);
   }
 
   async archiveStaffMember(userId: string, staffId: string): Promise<void> {
@@ -427,6 +434,31 @@ export class VendorsService {
     await this.prisma.staffMember.update({
       where: { id: staffId },
       data: { isActive: false },
+    });
+  }
+
+  async requestStaffAvatarUploadUrl(
+    userId: string,
+    staffId: string,
+    params: RequestStaffAvatarUploadUrlDto,
+  ) {
+    const vendor = await this.requireVendor(userId);
+    await this.ensureStaffBelongsToVendor(staffId, vendor.id);
+
+    this.assertStaffAvatarConstraints(params.mimeType, params.sizeBytes);
+    const extension = resolveImageExtension(params.mimeType);
+    if (!extension) {
+      throw new BadRequestException('Unsupported image type for staff avatar.');
+    }
+    const storageKey = `vendors/${vendor.id}/staff/${staffId}/avatar/${randomUUID()}.${extension}`;
+    return this.storage.createPresignedUpload({
+      key: storageKey,
+      contentType: normalizeMimeType(params.mimeType),
+      metadata: {
+        vendorId: vendor.id,
+        staffId,
+        purpose: 'staff-avatar',
+      },
     });
   }
 
@@ -799,6 +831,34 @@ export class VendorsService {
     }
   }
 
+  private assertStaffAvatarConstraints(
+    mimeType?: string,
+    sizeBytes?: number,
+  ): void {
+    const normalizedMime = normalizeMimeType(mimeType);
+    if (!normalizedMime) {
+      throw new BadRequestException('Avatar mime type is required.');
+    }
+
+    if (
+      typeof sizeBytes !== 'number' ||
+      Number.isNaN(sizeBytes) ||
+      sizeBytes <= 0
+    ) {
+      throw new BadRequestException('Avatar file size is required.');
+    }
+
+    if (sizeBytes > MAX_STAFF_AVATAR_SIZE_BYTES) {
+      throw new BadRequestException(
+        'Avatar file exceeds the maximum size of 2MB.',
+      );
+    }
+
+    if (!resolveImageExtension(normalizedMime)) {
+      throw new BadRequestException('Unsupported avatar image type.');
+    }
+  }
+
   private assertKycConstraints(
     mimeType?: string,
     sizeBytes?: number,
@@ -956,6 +1016,20 @@ export class VendorsService {
       return 'pdf';
     }
     return null;
+  }
+
+  private withStaffAvatarUrl<T extends { avatarStorageKey: string | null }>(
+    staff: T,
+  ): T & { avatarUrl: string | null } {
+    const avatarUrl =
+      staff.avatarStorageKey && staff.avatarStorageKey.length > 0
+        ? this.storage.buildPublicUrl(staff.avatarStorageKey)
+        : null;
+
+    return {
+      ...staff,
+      avatarUrl,
+    };
   }
 
   private defaultProfileInclude() {

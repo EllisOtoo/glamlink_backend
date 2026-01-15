@@ -447,6 +447,11 @@ export class ServicesService {
         capacity: number;
         bookedCount: number;
         available: boolean;
+        staff?: {
+          id: string;
+          name: string;
+          avatarStorageKey: string | null;
+        } | null;
       }[];
     }[]
   > {
@@ -509,6 +514,11 @@ export class ServicesService {
         capacity: number;
         bookedCount: number;
         available: boolean;
+        staff?: {
+          id: string;
+          name: string;
+          avatarStorageKey: string | null;
+        } | null;
       }[];
     }[]
   > {
@@ -575,6 +585,11 @@ export class ServicesService {
         capacity: number;
         bookedCount: number;
         available: boolean;
+        staff?: {
+          id: string;
+          name: string;
+          avatarStorageKey: string | null;
+        } | null;
       }[];
     }[]
   > {
@@ -590,6 +605,15 @@ export class ServicesService {
           { services: { some: { serviceId: service.id } } },
           { services: { none: {} } },
         ],
+      },
+      include: {
+        staff: {
+          select: {
+            id: true,
+            name: true,
+            avatarStorageKey: true,
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -653,6 +677,13 @@ export class ServicesService {
           capacity,
           bookedCount,
           available,
+          staff: seat.staff
+            ? {
+                id: seat.staff.id,
+                name: seat.staff.name,
+                avatarStorageKey: seat.staff.avatarStorageKey,
+              }
+            : null,
         };
       });
 

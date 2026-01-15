@@ -29,6 +29,7 @@ import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
 import { CreateSeatDto } from './dto/create-seat.dto';
 import { UpdateSeatDto } from './dto/update-seat.dto';
 import { RequestKycUploadUrlDto } from './dto/request-kyc-upload-url.dto';
+import { RequestStaffAvatarUploadUrlDto } from './dto/request-staff-avatar-upload-url.dto';
 
 @Controller()
 export class VendorsController {
@@ -154,6 +155,17 @@ export class VendorsController {
   ) {
     await this.vendorsService.archiveStaffMember(user.id, staffId);
     return { status: 'ok' };
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/me/staff/:staffId/avatar/upload-url')
+  requestStaffAvatarUpload(
+    @CurrentUser() user: User,
+    @Param('staffId') staffId: string,
+    @Body() dto: RequestStaffAvatarUploadUrlDto,
+  ) {
+    return this.vendorsService.requestStaffAvatarUploadUrl(user.id, staffId, dto);
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
