@@ -10,17 +10,16 @@ export class SearchService {
       return { suggestions: [] };
     }
 
-    // Using raw SQL for Postgres-specific trigram and word similarity matching.
-    // word_similarity is better for partial word matches (e.g. "har" -> "Hair Styling")
+    // Using raw SQL for Postgres-specific trigram similarity matching
     const suggestions: any[] = await this.prisma.$queryRaw`
       WITH search_results AS (
         SELECT 
           name as label, 
           'service' as type,
           id as "itemId",
-          word_similarity(${query}, name) as score
+          similarity(name, ${query}) as score
         FROM "Service"
-        WHERE (${query} <% name OR name % ${query}) AND "isActive" = true
+        WHERE name % ${query} AND "isActive" = true
         
         UNION ALL
         
@@ -28,9 +27,9 @@ export class SearchService {
           "businessName" as label, 
           'vendor' as type,
           id as "itemId",
-          word_similarity(${query}, "businessName") as score
+          similarity("businessName", ${query}) as score
         FROM "Vendor"
-        WHERE (${query} <% "businessName" OR "businessName" % ${query}) AND status = 'VERIFIED'
+        WHERE "businessName" % ${query} AND status = 'VERIFIED'
 
         UNION ALL
 
@@ -38,13 +37,12 @@ export class SearchService {
           name as label,
           'category' as type,
           id as "itemId",
-          word_similarity(${query}, name) as score
+          similarity(name, ${query}) as score
         FROM "Category"
-        WHERE (${query} <% name OR name % ${query})
+        WHERE name % ${query}
       )
       SELECT * FROM search_results
-      WHERE score > 0.2
-      ORDER BY score DESC, label ASC
+      ORDER BY score DESC
       LIMIT ${limit};
     `;
 
