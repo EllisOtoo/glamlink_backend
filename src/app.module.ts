@@ -20,6 +20,7 @@ import { PlatformSettingsModule } from './platform-settings/platform-settings.mo
 import { GiftCardsModule } from './gift-cards/gift-cards.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { LocationsModule } from './locations/locations.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { LocationsModule } from './locations/locations.module';
     GiftCardsModule,
     PayoutsModule,
     LocationsModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],
