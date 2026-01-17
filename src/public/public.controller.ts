@@ -107,6 +107,25 @@ export class PublicCatalogController {
     return this.catalog.getServiceReviews(serviceId, query);
   }
 
+  @Get('services/:serviceId/recommendations')
+  serviceRecommendations(
+    @Param('serviceId') serviceId: string,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
+    @Query('limit') limit?: string,
+  ): Promise<NearbyServiceSummary[]> {
+    const latitude = lat ? parseFloat(lat) : undefined;
+    const longitude = lng ? parseFloat(lng) : undefined;
+    const parsedLimit = limit ? parseInt(limit, 10) : undefined;
+
+    return this.catalog.getServiceRecommendations(serviceId, {
+      latitude,
+      longitude,
+      limit: parsedLimit,
+    });
+  }
+
+
   @Get('vendors/:handle/reviews')
   vendorReviews(
     @Param('handle') handle: string,

@@ -40,6 +40,7 @@ export interface VendorSummary {
   facebookUrl: string | null;
   xHandle: string | null;
   youtubeChannel: string | null;
+  bookingCount: number;
 }
 
 export interface ServiceImageSummary {
@@ -66,6 +67,9 @@ export interface ServiceSummary {
   images: ServiceImageSummary[];
   includes: string[];
   createdAt: Date;
+  bookingCount: number;
+  ratingAverage: number | null;
+  ratingCount: number;
 }
 
 export interface NearbyServiceSummary extends ServiceSummary {
@@ -92,11 +96,13 @@ export interface ServiceDetailSummary extends ServiceSummary {
   ratingAverage: number | null;
   ratingCount: number;
   ratingHistogram: number[];
-  previewReviews: ServiceReview[];
+  recentReviews: ServiceReview[];
+  bookingCount: number;
 }
 
 export interface VendorDetailSummary extends VendorSummary {
   services: ServiceSummary[];
+  recentReviews: ServiceReview[];
 }
 
 export interface ServiceAvailabilitySlot {
@@ -165,6 +171,9 @@ type VendorSummarySource = {
   youtubeChannel: string | null;
   status: VendorStatus;
   services: { priceCents: number }[];
+  bookingCount: number;
+  ratingAverage: number | null;
+  ratingCount: number;
 };
 
 const SERVICE_INCLUDE = {
@@ -188,6 +197,9 @@ const SERVICE_INCLUDE = {
       facebookUrl: true,
       xHandle: true,
       youtubeChannel: true,
+      bookingCount: true,
+      ratingAverage: true,
+      ratingCount: true,
       services: {
         where: { isActive: true },
         select: { priceCents: true },
@@ -260,6 +272,9 @@ export class PublicCatalogService {
         facebookUrl: true,
         xHandle: true,
         youtubeChannel: true,
+        bookingCount: true,
+        ratingAverage: true,
+        ratingCount: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -325,6 +340,9 @@ export class PublicCatalogService {
         facebookUrl: true,
         xHandle: true,
         youtubeChannel: true,
+        bookingCount: true,
+        ratingAverage: true,
+        ratingCount: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -375,22 +393,19 @@ export class PublicCatalogService {
         facebookUrl: true,
         xHandle: true,
         youtubeChannel: true,
-        services: {
-          where: { isActive: true },
-          select: { priceCents: true },
-        },
+        bookingCount: true,
+        ratingAverage: true,
+        ratingCount: true,
+      services: {
+        where: { isActive: true },
+        select: { priceCents: true },
       },
-    });
+    },
+  });
 
     if (!vendor || (vendor.status !== VendorStatus.VERIFIED && vendor.status !== VendorStatus.DRAFT && vendor.status !== VendorStatus.PENDING_REVIEW)) {
       throw new NotFoundException('Vendor not found.');
     }
-
-    const reviewAggregate = await this.prisma.review.aggregate({
-      where: { vendorId: vendor.id },
-      _avg: { rating: true },
-      _count: { rating: true },
-    });
 
     const services = await this.prisma.service.findMany({
       where: { vendorId: vendor.id, isActive: true },
@@ -398,27 +413,18 @@ export class PublicCatalogService {
       include: SERVICE_INCLUDE,
     });
 
-    const reviewSummaries: ReviewAggregate[] = [
-      {
-        vendorId: vendor.id,
-        _avg: { rating: reviewAggregate._avg.rating ?? null },
-        _count: { rating: reviewAggregate._count.rating ?? 0 },
-      },
-    ];
+    const recentReviews = await this.listVendorReviews(vendor.id, { take: 3 });
 
     const markupBps = await this.platformSettings.getServiceMarkupBps();
-    const vendorSummary = this.mapVendorSummary(
-      vendor,
-      reviewSummaries,
-      markupBps,
-    );
+    const vendorSummary = this.mapVendorSummary(vendor, [], markupBps);
     const serviceSummaries = services.map((service) =>
-      this.mapServiceSummary(service, reviewSummaries, markupBps),
+      this.mapServiceSummary(service, [], markupBps),
     );
 
     return {
       ...vendorSummary,
       services: serviceSummaries,
+      recentReviews,
     };
   }
 
@@ -442,6 +448,20 @@ export class PublicCatalogService {
       where: { vendorId: vendor.id },
       orderBy: { createdAt: 'desc' },
       take: limit && limit > 0 ? limit : undefined,
+      include: {
+        services: {
+          include: {
+            service: {
+              select: {
+                id: true,
+                name: true,
+                priceCents: true,
+                durationMinutes: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     return items.map((item) => ({
@@ -450,6 +470,9 @@ export class PublicCatalogService {
       type: item.type,
       externalUrl: item.externalUrl ?? null,
       caption: item.caption ?? null,
+      services: item.services.map((s) => ({
+        service: s.service,
+      })),
     }));
   }
 
@@ -657,11 +680,8 @@ export class PublicCatalogService {
     reviewAggregates: ReviewAggregate[],
     markupBps: number,
   ): ServiceSummary {
-    const vendor = service.vendor;
-    const vendorSummary = this.mapVendorSummary(
-      vendor,
-      reviewAggregates,
-      markupBps,
+    const summary = reviewAggregates.find(
+      (aggregate) => aggregate.vendorId === service.vendor.id,
     );
 
     return {
@@ -670,8 +690,7 @@ export class PublicCatalogService {
       description: service.description ?? null,
       priceCents: this.applyMarkup(service.priceCents, markupBps),
       durationMinutes: service.durationMinutes,
-      createdAt: service.createdAt,
-      vendor: vendorSummary,
+      vendor: this.mapVendorSummary(service.vendor, reviewAggregates, markupBps),
       images: service.images.map((image) => ({
         id: image.id,
         caption: image.caption ?? null,
@@ -681,6 +700,10 @@ export class PublicCatalogService {
         ),
       })),
       includes: service.includes,
+      createdAt: service.createdAt,
+      bookingCount: service.bookingCount,
+      ratingAverage: (service as any).ratingAverage ?? null,
+      ratingCount: (service as any).ratingCount ?? 0,
     };
   }
 
@@ -775,7 +798,7 @@ export class PublicCatalogService {
     );
 
     const seats = await this.listSeatsForService(service.vendor.id, service.id);
-    const previewReviews = await this.listServiceReviews(service.id, {
+    const recentReviews = await this.listServiceReviews(service.id, {
       take: 3,
     });
 
@@ -785,7 +808,7 @@ export class PublicCatalogService {
       ratingAverage: ratingSummary.average,
       ratingCount: ratingSummary.count,
       ratingHistogram: ratingSummary.histogram,
-      previewReviews,
+      recentReviews,
     };
   }
 
@@ -924,15 +947,14 @@ export class PublicCatalogService {
       }
     });
 
-    const aggregate = await this.prisma.review.aggregate({
-      where: { vendorId },
-      _avg: { rating: true },
-      _count: { rating: true },
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: { ratingAverage: true, ratingCount: true },
     });
 
     return {
-      average: aggregate._avg.rating ?? null,
-      count: aggregate._count.rating ?? 0,
+      average: vendor?.ratingAverage ?? null,
+      count: vendor?.ratingCount ?? 0,
       histogram,
     };
   }
@@ -1018,18 +1040,160 @@ export class PublicCatalogService {
       }
     });
 
-    const aggregate = await this.prisma.review.aggregate({
-      where: { booking: { serviceId } },
-      _avg: { rating: true },
-      _count: { rating: true },
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { ratingAverage: true, ratingCount: true },
     });
 
     return {
-      average: aggregate._avg.rating ?? null,
-      count: aggregate._count.rating ?? 0,
+      average: service?.ratingAverage ?? null,
+      count: service?.ratingCount ?? 0,
       histogram,
     };
   }
+
+  async getServiceRecommendations(
+    serviceId: string,
+    options: {
+      latitude?: number;
+      longitude?: number;
+      limit?: number;
+    } = {},
+  ): Promise<NearbyServiceSummary[]> {
+    const limit = options.limit ?? 6;
+
+    // Get the current service
+    const currentService = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: {
+        id: true,
+        categoryId: true,
+        priceCents: true,
+        vendor: {
+          select: {
+            id: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+      },
+    });
+
+    if (!currentService) {
+      throw new NotFoundException('Service not found.');
+    }
+
+    // Build where clause for similar services
+    const where: Prisma.ServiceWhereInput = {
+      isActive: true,
+      id: { not: serviceId }, // Exclude current service
+      vendor: {
+        status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
+      },
+    };
+
+    // Same category filter
+    if (currentService.categoryId) {
+      where.categoryId = currentService.categoryId;
+    }
+
+    const markupBps = await this.platformSettings.getServiceMarkupBps();
+
+    // Fetch candidate services
+    const services = await this.prisma.service.findMany({
+      where,
+      take: 50, // Get more than needed for scoring
+      orderBy: [{ ratingAverage: 'desc' }, { createdAt: 'desc' }],
+      include: SERVICE_INCLUDE,
+    });
+
+    const vendorIds = services
+      .map((service) => service.vendor?.id)
+      .filter((id): id is string => Boolean(id));
+
+    const reviewAggregates =
+      vendorIds.length === 0
+        ? []
+        : await this.prisma.review.groupBy({
+            by: ['vendorId'],
+            where: { vendorId: { in: vendorIds } },
+            _avg: { rating: true },
+            _count: { rating: true },
+          });
+
+    // Calculate scores for each service
+    const scoredServices = services
+      .filter((service) => service.vendor)
+      .map((service) => {
+        const vendor = service.vendor!;
+        let score = 0;
+
+        // Category match (40%)
+        const categoryMatch = service.categoryId === currentService.categoryId ? 1 : 0;
+        score += categoryMatch * 0.4;
+
+        // Proximity score (30%) - if location provided
+        let distanceKm = 0;
+        if (
+          options.latitude &&
+          options.longitude &&
+          vendor.latitude &&
+          vendor.longitude
+        ) {
+          distanceKm = this.calculateDistanceKm(
+            options.latitude,
+            options.longitude,
+            vendor.latitude,
+            vendor.longitude,
+          );
+          const maxDistance = 50; // 50km max
+          const proximityScore = Math.max(0, 1 - distanceKm / maxDistance);
+          score += proximityScore * 0.3;
+        } else {
+          // If no location, use current service vendor location
+          if (
+            currentService.vendor.latitude &&
+            currentService.vendor.longitude &&
+            vendor.latitude &&
+            vendor.longitude
+          ) {
+            distanceKm = this.calculateDistanceKm(
+              currentService.vendor.latitude,
+              currentService.vendor.longitude,
+              vendor.latitude,
+              vendor.longitude,
+            );
+            const maxDistance = 50;
+            const proximityScore = Math.max(0, 1 - distanceKm / maxDistance);
+            score += proximityScore * 0.3;
+          }
+        }
+
+        // Rating score (20%)
+        const ratingScore = (service.ratingAverage ?? 0) / 5;
+        score += ratingScore * 0.2;
+
+        // Price similarity (10%)
+        const priceDiff = Math.abs(currentService.priceCents - service.priceCents);
+        const priceRatio = priceDiff / currentService.priceCents;
+        const priceScore = Math.max(0, 1 - Math.min(priceRatio, 0.3) / 0.3); // Cap at ±30%
+        score += priceScore * 0.1;
+
+        return {
+          service,
+          score,
+          distanceKm,
+        };
+      })
+      .sort((a, b) => b.score - a.score) // Sort by score descending
+      .slice(0, limit);
+
+    return scoredServices.map(({ service, distanceKm }) => ({
+      ...this.mapServiceSummary(service, reviewAggregates, markupBps),
+      distanceKm,
+    }));
+  }
+
 
   private async listServiceReviews(
     serviceId: string,
@@ -1149,8 +1313,8 @@ export class PublicCatalogService {
             vendor.logoVersion ?? null,
           )
         : null,
-      ratingAverage: summary?._avg.rating ?? null,
-      ratingCount: summary?._count.rating ?? 0,
+      ratingAverage: vendor.ratingAverage ?? null,
+      ratingCount: vendor.ratingCount ?? 0,
       startingPriceCents,
       latitude: vendor.latitude ?? null,
       longitude: vendor.longitude ?? null,
@@ -1163,6 +1327,7 @@ export class PublicCatalogService {
       facebookUrl: vendor.facebookUrl ?? null,
       xHandle: vendor.xHandle ?? null,
       youtubeChannel: vendor.youtubeChannel ?? null,
+      bookingCount: vendor.bookingCount,
     };
   }
 

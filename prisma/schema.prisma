@@ -55,6 +55,9 @@ model Vendor {
   statusHistory         VendorStatusHistory[]
   walletTransactions    WalletTransaction[]
   weeklyHours           WeeklyAvailability[]
+  bookingCount          Int                    @default(0)
+  ratingAverage         Float?                 @default(0)
+  ratingCount           Int                    @default(0)
 
   @@index([status])
 }
@@ -179,6 +182,9 @@ model Service {
   seatLinks       ServiceSeatService[]
   includes        String[]               @default([])
   portfolioItems  PortfolioItemService[]
+  bookingCount    Int                    @default(0)
+  ratingAverage   Float?                 @default(0)
+  ratingCount     Int                    @default(0)
 
   @@index([vendorId, isActive])
   @@index([categoryId])

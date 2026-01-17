@@ -250,6 +250,16 @@ export class PaystackService {
             status: BookingStatus.CONFIRMED,
           },
         });
+
+        // Increment denormalized booking counts
+        await tx.service.update({
+          where: { id: confirmedBooking.serviceId },
+          data: { bookingCount: { increment: 1 } },
+        });
+        await tx.vendor.update({
+          where: { id: confirmedBooking.vendorId },
+          data: { bookingCount: { increment: 1 } },
+        });
       } else if (paymentIntent.supplyOrder) {
         await tx.supplyOrder.update({
           where: { id: paymentIntent.supplyOrder.id },

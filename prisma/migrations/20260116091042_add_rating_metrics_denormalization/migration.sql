@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "Service" ADD COLUMN     "ratingAverage" DOUBLE PRECISION DEFAULT 0,
+ADD COLUMN     "ratingCount" INTEGER NOT NULL DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "Vendor" ADD COLUMN     "ratingAverage" DOUBLE PRECISION DEFAULT 0,
+ADD COLUMN     "ratingCount" INTEGER NOT NULL DEFAULT 0;

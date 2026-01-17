@@ -249,6 +249,10 @@ export class BookingsService {
         });
       }
 
+      if (created.status === BookingStatus.CONFIRMED) {
+        await this.incrementBookingCounts(tx, service.id, vendor.id);
+      }
+
       if (remainingDeposit > 0) {
         await tx.paymentIntent.create({
           data: {
@@ -994,6 +998,12 @@ export class BookingsService {
       });
     });
 
+    await this.incrementBookingCounts(
+      this.prisma,
+      booking.serviceId,
+      booking.vendorId,
+    );
+
     await this.calendarService.syncEntriesForBooking(updated);
     this.bookingEvents.emitConfirmed(updated, { markedPaidManually: true });
     return updated;
@@ -1034,6 +1044,21 @@ export class BookingsService {
     }
 
     return { service, vendor: service.vendor };
+  }
+
+  private async incrementBookingCounts(
+    tx: Prisma.TransactionClient,
+    serviceId: string,
+    vendorId: string,
+  ) {
+    await tx.service.update({
+      where: { id: serviceId },
+      data: { bookingCount: { increment: 1 } },
+    });
+    await tx.vendor.update({
+      where: { id: vendorId },
+      data: { bookingCount: { increment: 1 } },
+    });
   }
 
   private async resolveSeatAssignment(

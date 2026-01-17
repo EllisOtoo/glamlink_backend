@@ -100,6 +100,22 @@ export class ReviewsService {
       rating: review.rating,
     });
 
+    // Update denormalized rating metrics
+    await this.prisma.$transaction(async (tx) => {
+      await this.recalculateRatingMetrics(
+        tx,
+        'service',
+        booking.serviceId,
+        dto.rating,
+      );
+      await this.recalculateRatingMetrics(
+        tx,
+        'vendor',
+        booking.vendorId,
+        dto.rating,
+      );
+    });
+
     return review;
   }
 
@@ -253,5 +269,32 @@ export class ReviewsService {
         )}MB or smaller.`,
       );
     }
+  }
+
+  private async recalculateRatingMetrics(
+    tx: any, // Using any here to allow dynamic access to tx[entityType]
+    entityType: 'service' | 'vendor',
+    entityId: string,
+    newRating: number,
+  ) {
+    const entity = await tx[entityType].findUnique({
+      where: { id: entityId },
+      select: { ratingAverage: true, ratingCount: true },
+    });
+
+    if (!entity) return;
+
+    const oldCount = entity.ratingCount || 0;
+    const oldAverage = entity.ratingAverage || 0;
+    const newCount = oldCount + 1;
+    const newAverage = (oldAverage * oldCount + newRating) / newCount;
+
+    await tx[entityType].update({
+      where: { id: entityId },
+      data: {
+        ratingAverage: newAverage,
+        ratingCount: newCount,
+      },
+    });
   }
 }
