@@ -20,4 +20,10 @@ export class DiscoverServicesQueryDto {
   @Min(1)
   @Max(50)
   limit?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }

@@ -506,6 +506,7 @@ export class PublicCatalogService {
     }
 
     const limit = query.limit ?? 12;
+    const offset = query.offset ?? 0;
 
     const markupBps = await this.platformSettings.getServiceMarkupBps();
 
@@ -513,6 +514,7 @@ export class PublicCatalogService {
       where,
       orderBy: [{ createdAt: 'desc' }],
       take: limit,
+      skip: offset,
       include: SERVICE_INCLUDE,
     });
 
