@@ -10,49 +10,120 @@ export class SearchService {
       return { suggestions: [] };
     }
 
-    // Using raw SQL for Postgres-specific trigram similarity matching
-    const suggestions: any[] = await this.prisma.$queryRaw`
-      WITH search_results AS (
-        SELECT 
-          name as label, 
-          'service' as type,
-          id as "itemId",
-          similarity(name, ${query}) as score
-        FROM "Service"
-        WHERE name % ${query} AND "isActive" = true
-        
-        UNION ALL
-        
-        SELECT 
-          "businessName" as label, 
-          'vendor' as type,
-          id as "itemId",
-          similarity("businessName", ${query}) as score
-        FROM "Vendor"
-        WHERE "businessName" % ${query} AND status = 'VERIFIED'
+    // Sanitize query for SQL safety (Prisma handles this, but being explicit)
+    const sanitizedQuery = query.trim();
 
-        UNION ALL
+    // Multi-strategy search:
+    // 1. Prefix matching (ILIKE) - catches "har" → "Hair"
+    // 2. Lowered threshold trigram matching (0.1) - fuzzy matches
+    // Results are combined, de-duplicated, and ranked by match quality
+    
+    // Use a transaction to set the threshold and run the query
+    const suggestions: any[] = await this.prisma.$transaction(async (tx) => {
+      // Lower the similarity threshold for this transaction only
+      await tx.$executeRaw`SELECT set_config('pg_trgm.similarity_threshold', '0.1', true)`;
+      
+      return tx.$queryRaw`
+        WITH prefix_matches AS (
+          -- Tier 1: Exact prefix matches (highest priority)
+          SELECT 
+            name as label, 
+            'service' as type,
+            id as "itemId",
+            1.0 as score,
+            1 as tier
+          FROM "Service"
+          WHERE LOWER(name) LIKE LOWER(${sanitizedQuery}) || '%' AND "isActive" = true
+          
+          UNION ALL
+          
+          SELECT 
+            "businessName" as label, 
+            'vendor' as type,
+            id as "itemId",
+            1.0 as score,
+            1 as tier
+          FROM "Vendor"
+          WHERE LOWER("businessName") LIKE LOWER(${sanitizedQuery}) || '%' AND status = 'VERIFIED'
 
-        SELECT 
-          name as label,
-          'category' as type,
-          id as "itemId",
-          similarity(name, ${query}) as score
-        FROM "Category"
-        WHERE name % ${query}
-      )
-      SELECT * FROM search_results
-      ORDER BY score DESC
-      LIMIT ${limit};
-    `;
+          UNION ALL
+
+          SELECT 
+            name as label,
+            'category' as type,
+            id as "itemId",
+            1.0 as score,
+            1 as tier
+          FROM "Category"
+          WHERE LOWER(name) LIKE LOWER(${sanitizedQuery}) || '%'
+        ),
+        
+        trigram_matches AS (
+          -- Tier 2: Trigram similarity matches (with lowered threshold)
+          SELECT 
+            name as label, 
+            'service' as type,
+            id as "itemId",
+            similarity(name, ${sanitizedQuery}) as score,
+            2 as tier
+          FROM "Service"
+          WHERE name % ${sanitizedQuery} AND "isActive" = true
+          
+          UNION ALL
+          
+          SELECT 
+            "businessName" as label, 
+            'vendor' as type,
+            id as "itemId",
+            similarity("businessName", ${sanitizedQuery}) as score,
+            2 as tier
+          FROM "Vendor"
+          WHERE "businessName" % ${sanitizedQuery} AND status = 'VERIFIED'
+
+          UNION ALL
+
+          SELECT 
+            name as label,
+            'category' as type,
+            id as "itemId",
+            similarity(name, ${sanitizedQuery}) as score,
+            2 as tier
+          FROM "Category"
+          WHERE name % ${sanitizedQuery}
+        ),
+
+        combined AS (
+          SELECT * FROM prefix_matches
+          UNION ALL
+          SELECT * FROM trigram_matches
+        ),
+
+        deduplicated AS (
+          -- De-duplicate by itemId+type, keeping highest tier (prefix > trigram)
+          SELECT DISTINCT ON ("itemId", type)
+            label,
+            type,
+            "itemId",
+            score,
+            tier
+          FROM combined
+          ORDER BY "itemId", type, tier ASC, score DESC
+        )
+
+        SELECT label, type, "itemId", score
+        FROM deduplicated
+        ORDER BY tier ASC, score DESC
+        LIMIT ${limit};
+      `;
+    });
 
     return {
-      suggestions: suggestions.map(s => ({
+      suggestions: suggestions.map((s) => ({
         label: s.label,
         type: s.type,
         itemId: s.itemId,
-        score: s.score
-      }))
+        score: s.score,
+      })),
     };
   }
 }
