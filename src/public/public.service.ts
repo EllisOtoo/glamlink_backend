@@ -47,6 +47,8 @@ export interface ServiceImageSummary {
   id: string;
   imageUrl: string;
   caption: string | null;
+  width: number | null;
+  height: number | null;
 }
 
 export interface PortfolioItemSummary {
@@ -212,6 +214,8 @@ const SERVICE_INCLUDE = {
       id: true,
       storageKey: true,
       caption: true,
+      width: true,
+      height: true,
       updatedAt: true,
     },
   },
@@ -700,6 +704,8 @@ export class PublicCatalogService {
           image.storageKey,
           Math.floor(image.updatedAt.getTime() / 1000),
         ),
+        width: image.width ?? null,
+        height: image.height ?? null,
       })),
       includes: service.includes,
       createdAt: service.createdAt,

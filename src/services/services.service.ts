@@ -256,6 +256,8 @@ export class ServicesService {
         storageKey: normalizedKey,
         caption,
         sortOrder: nextSortOrder,
+        width: dto.width ?? null,
+        height: dto.height ?? null,
       },
     });
   }
