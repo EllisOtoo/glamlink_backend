@@ -212,9 +212,8 @@ export class AuthController {
     const isProduction = process.env.NODE_ENV === 'production';
     response.cookie('access_token', token, {
       httpOnly: true,
-      secure: true, // Must be true for SameSite=None
-      // sameSite: isProduction ? 'none' : 'lax', // 'none' required for cross-origin
-      sameSite: 'none', // 'none' required for cross-origin
+      secure: isProduction, // Must be true for SameSite=None
+      sameSite: isProduction ? 'none' : 'lax', // 'none' required for cross-origin
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
     });
