@@ -5,11 +5,19 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import probe from 'probe-image-size';
+import { Readable } from 'stream';
 
 const DEFAULT_UPLOAD_EXPIRATION_SECONDS = 60 * 5;
 const DEFAULT_DOWNLOAD_EXPIRATION_SECONDS = 60 * 10;
+
+export interface ImageDimensions {
+  width: number;
+  height: number;
+}
+
 
 export interface PresignedUploadResult {
   storageKey: string;
@@ -96,4 +104,48 @@ export class StorageService {
       }),
     );
   }
+
+  private readonly logger = new Logger(StorageService.name);
+
+  /**
+   * Extract image dimensions from an S3 object.
+   * Uses probe-image-size which only reads the header bytes, making it efficient.
+   * Returns null if the object doesn't exist or isn't a supported image format.
+   */
+  async getImageDimensions(key: string): Promise<ImageDimensions | null> {
+    if (!key) {
+      return null;
+    }
+
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      });
+
+      const response = await this.s3.send(command);
+
+      if (!response.Body) {
+        this.logger.warn(`No body in S3 response for key: ${key}`);
+        return null;
+      }
+
+      // Convert the response body to a readable stream
+      const bodyStream = response.Body as Readable;
+
+      const result = await probe(bodyStream);
+
+      return {
+        width: result.width,
+        height: result.height,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to get image dimensions for key: ${key}`,
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }
+  }
 }
+

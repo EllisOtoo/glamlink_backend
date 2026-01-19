@@ -250,17 +250,30 @@ export class ServicesService {
     const nextSortOrder =
       typeof dto.sortOrder === 'number' ? dto.sortOrder : existingCount;
 
+    // Auto-extract dimensions if not provided
+    let width = dto.width ?? null;
+    let height = dto.height ?? null;
+
+    if (width === null || height === null) {
+      const dimensions = await this.storage.getImageDimensions(normalizedKey);
+      if (dimensions) {
+        width = dimensions.width;
+        height = dimensions.height;
+      }
+    }
+
     return this.prisma.serviceImage.create({
       data: {
         serviceId: service.id,
         storageKey: normalizedKey,
         caption,
         sortOrder: nextSortOrder,
-        width: dto.width ?? null,
-        height: dto.height ?? null,
+        width,
+        height,
       },
     });
   }
+
 
   async listServiceImagesForVendor(
     userId: string,
