@@ -30,6 +30,8 @@ model Vendor {
   latitude              Float?
   longitude             Float?
   serviceRadiusKm       Int?                   @default(15)
+  travelsNationally     Boolean                @default(false)
+  travelFeePerKmPesewas Int?                   // Fee per km in pesewas (e.g., 100 = GHS 1/km)
   onboardingStep        Int?                   @default(0)
   professionalTitle     String?
   yearsExperience       Int?
@@ -274,6 +276,10 @@ model Booking {
   createdByUserId     String?
   source              BookingSource          @default(ONLINE)
   paidAt              DateTime?
+  travelFeePesewas    Int?                   // Distance-based travel fee included
+  travelDistanceKm    Float?                 // Distance from vendor to customer
+  customerLatitude    Float?                 // Customer service location
+  customerLongitude   Float?                 // Customer service location
   createdBy           User?                  @relation("CreatedBookings", fields: [createdByUserId], references: [id])
   customer            User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id])
   seat                ServiceSeat?           @relation(fields: [seatId], references: [id])

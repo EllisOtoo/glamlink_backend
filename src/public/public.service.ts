@@ -41,6 +41,8 @@ export interface VendorSummary {
   xHandle: string | null;
   youtubeChannel: string | null;
   bookingCount: number;
+  travelsNationally: boolean;
+  travelFeePerKmPesewas: number | null;
 }
 
 export interface ServiceImageSummary {
@@ -176,6 +178,8 @@ type VendorSummarySource = {
   bookingCount: number;
   ratingAverage: number | null;
   ratingCount: number;
+  travelsNationally?: boolean;
+  travelFeePerKmPesewas?: number | null;
 };
 
 const SERVICE_INCLUDE = {
@@ -202,6 +206,8 @@ const SERVICE_INCLUDE = {
       bookingCount: true,
       ratingAverage: true,
       ratingCount: true,
+      travelsNationally: true,
+      travelFeePerKmPesewas: true,
       services: {
         where: { isActive: true },
         select: { priceCents: true },
@@ -548,15 +554,34 @@ export class PublicCatalogService {
   ): Promise<NearbyServiceSummary[]> {
     const { latitude, longitude } = query;
     const radiusKm = query.radiusKm ?? 15;
+    const includeTravelVendors = query.includeTravelVendors !== false; // Default true
+    const travelVendorsOnly = query.travelVendorsOnly === true;
 
     const markupBps = await this.platformSettings.getServiceMarkupBps();
+
+    // Build vendor filter based on travel mode
+    const vendorFilter: Prisma.VendorWhereInput = {
+      status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
+    };
+
+    if (travelVendorsOnly) {
+      // Only travel vendors
+      vendorFilter.travelsNationally = true;
+    } else if (includeTravelVendors) {
+      // Both local (with coords) and travel vendors
+      vendorFilter.OR = [
+        { latitude: { not: null }, longitude: { not: null } },
+        { travelsNationally: true },
+      ];
+    } else {
+      // Only local vendors with coordinates
+      vendorFilter.latitude = { not: null };
+      vendorFilter.longitude = { not: null };
+    }
+
     const where: Prisma.ServiceWhereInput = {
       isActive: true,
-      vendor: {
-        status: { in: [VendorStatus.VERIFIED, VendorStatus.DRAFT, VendorStatus.PENDING_REVIEW] },
-        latitude: { not: null },
-        longitude: { not: null },
-      },
+      vendor: vendorFilter,
     };
 
     if (query.categoryId) {
@@ -584,36 +609,54 @@ export class PublicCatalogService {
             _count: { rating: true },
           });
 
+    // Process services - travel vendors get distanceKm=0, local vendors calculated
     const withDistance = services
-      .filter(
-        (
-          service,
-        ): service is ServiceWithRelations & {
-          vendor: ServiceWithRelations['vendor'] & {
-            latitude: number;
-            longitude: number;
-          };
-        } =>
-          Boolean(
-            service.vendor &&
-              typeof service.vendor.latitude === 'number' &&
-              typeof service.vendor.longitude === 'number',
-          ),
-      )
+      .filter((service) => Boolean(service.vendor))
       .map((service) => {
-        const vendor = service.vendor;
+        const vendor = service.vendor!;
+        const isTravelVendor = vendor.travelsNationally === true;
+
+        // Travel vendors: no distance restriction, show at top (distanceKm = 0)
+        if (isTravelVendor) {
+          // Calculate actual distance if vendor has coords (for display purposes)
+          let displayDistance = 0;
+          if (
+            typeof vendor.latitude === 'number' &&
+            typeof vendor.longitude === 'number'
+          ) {
+            displayDistance = this.calculateDistanceKm(
+              latitude,
+              longitude,
+              vendor.latitude,
+              vendor.longitude,
+            );
+          }
+          return { service, distanceKm: displayDistance, isTravelVendor: true };
+        }
+
+        // Local vendors: calculate distance
+        if (
+          typeof vendor.latitude !== 'number' ||
+          typeof vendor.longitude !== 'number'
+        ) {
+          return null; // Skip local vendors without coords
+        }
+
         const distanceKm = this.calculateDistanceKm(
           latitude,
           longitude,
           vendor.latitude,
           vendor.longitude,
         );
-        return { service, distanceKm };
+        return { service, distanceKm, isTravelVendor: false };
       })
-      .filter(({ service, distanceKm }) => {
-        if (distanceKm > radiusKm) {
-          return false;
-        }
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .filter(({ distanceKm, isTravelVendor, service }) => {
+        // Travel vendors: no radius restrictions
+        if (isTravelVendor) return true;
+
+        // Local vendors: apply radius filters
+        if (distanceKm > radiusKm) return false;
         const vendorRadius = service.vendor?.serviceRadiusKm;
         if (
           typeof vendorRadius === 'number' &&
@@ -625,6 +668,10 @@ export class PublicCatalogService {
         return true;
       })
       .sort((a, b) => {
+        // Travel vendors first, then by rating or distance
+        if (a.isTravelVendor && !b.isTravelVendor) return -1;
+        if (!a.isTravelVendor && b.isTravelVendor) return 1;
+
         if (query.sortBy === 'rating') {
           const ratingA =
             reviewAggregates.find((r) => r.vendorId === a.service.vendor?.id)
@@ -1336,6 +1383,8 @@ export class PublicCatalogService {
       xHandle: vendor.xHandle ?? null,
       youtubeChannel: vendor.youtubeChannel ?? null,
       bookingCount: vendor.bookingCount,
+      travelsNationally: vendor.travelsNationally ?? false,
+      travelFeePerKmPesewas: vendor.travelFeePerKmPesewas ?? null,
     };
   }
 

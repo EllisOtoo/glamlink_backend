@@ -1,4 +1,14 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class CreatePublicBookingDto {
   @IsNotEmpty()
@@ -32,4 +42,23 @@ export class CreatePublicBookingDto {
   @IsOptional()
   @IsString()
   giftCardCode?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  includeTravelFee?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  customerLatitude?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  customerLongitude?: number;
 }
+

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsInt,
   IsNumber,
@@ -114,4 +115,15 @@ export class UpdateVendorProfileDto {
   @Min(0)
   @Max(5)
   onboardingStep?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  travelsNationally?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1000) // Max GHS 10/km (1000 pesewas = GHS 10)
+  travelFeePerKmPesewas?: number;
 }

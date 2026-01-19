@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -35,4 +36,15 @@ export class NearbyServicesQueryDto {
   @IsOptional()
   @IsEnum(['distance', 'rating'])
   sortBy?: 'distance' | 'rating' = 'distance';
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  includeTravelVendors?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  travelVendorsOnly?: boolean;
 }
+

@@ -144,10 +144,52 @@ export class BookingsService {
 
     const basePrice = this.assertPositiveInt(service.priceCents);
     const serviceMarkupBps = await this.platformSettings.getServiceMarkupBps();
-    const price = this.platformSettings.applyServiceMarkup(
+    const servicePrice = this.platformSettings.applyServiceMarkup(
       basePrice,
       serviceMarkupBps,
     );
+
+    // Calculate distance-based travel fee if requested
+    let travelFee = 0;
+    let travelDistanceKm: number | null = null;
+    let customerLatitude: number | null = null;
+    let customerLongitude: number | null = null;
+
+    if (
+      dto.includeTravelFee &&
+      vendor.travelsNationally &&
+      vendor.travelFeePerKmPesewas
+    ) {
+      if (
+        typeof dto.customerLatitude !== 'number' ||
+        typeof dto.customerLongitude !== 'number'
+      ) {
+        throw new BadRequestException(
+          'Customer location is required for travel fee calculation.',
+        );
+      }
+      if (
+        typeof vendor.latitude !== 'number' ||
+        typeof vendor.longitude !== 'number'
+      ) {
+        throw new BadRequestException(
+          'Vendor location is not set. Cannot calculate travel fee.',
+        );
+      }
+
+      customerLatitude = dto.customerLatitude;
+      customerLongitude = dto.customerLongitude;
+      travelDistanceKm = this.calculateDistanceKm(
+        vendor.latitude,
+        vendor.longitude,
+        dto.customerLatitude,
+        dto.customerLongitude,
+      );
+      travelFee = Math.round(travelDistanceKm * vendor.travelFeePerKmPesewas);
+    }
+
+    // Total price includes service + travel fee
+    const price = servicePrice + travelFee;
     const depositPercent = this.resolveDepositPercent(service.depositPercent);
     const calculatedDeposit = Math.min(
       price,
@@ -212,6 +254,11 @@ export class BookingsService {
           seatId: seatAssignment.seatId,
           staffId: seatAssignment.staffId,
           createdByUserId,
+          // Travel fee fields
+          travelFeePesewas: travelFee > 0 ? travelFee : null,
+          travelDistanceKm,
+          customerLatitude,
+          customerLongitude,
         },
       });
 
@@ -1318,5 +1365,25 @@ export class BookingsService {
 
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private calculateDistanceKm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const R = 6371; // Earth radius in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round((R * c + Number.EPSILON) * 100) / 100;
   }
 }

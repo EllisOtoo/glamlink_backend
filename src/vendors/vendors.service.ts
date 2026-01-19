@@ -122,6 +122,8 @@ export class VendorsService {
       longitude?: number;
       serviceRadiusKm?: number;
       onboardingStep?: number;
+      travelsNationally?: boolean;
+      travelFeePerKmPesewas?: number;
     },
   ): Promise<Vendor> {
     const normalizedHandle = payload.handle
@@ -173,6 +175,14 @@ export class VendorsService {
         typeof payload.onboardingStep === 'number'
           ? payload.onboardingStep
           : undefined,
+      travelsNationally:
+        typeof payload.travelsNationally === 'boolean'
+          ? payload.travelsNationally
+          : undefined,
+      travelFeePerKmPesewas:
+        typeof payload.travelFeePerKmPesewas === 'number'
+          ? payload.travelFeePerKmPesewas
+          : undefined,
     };
 
     return this.prisma.$transaction(async (tx) => {
@@ -220,6 +230,14 @@ export class VendorsService {
               typeof payload.onboardingStep === 'number'
                 ? payload.onboardingStep
                 : 0,
+            travelsNationally:
+              typeof payload.travelsNationally === 'boolean'
+                ? payload.travelsNationally
+                : false,
+            travelFeePerKmPesewas:
+              typeof payload.travelFeePerKmPesewas === 'number'
+                ? payload.travelFeePerKmPesewas
+                : undefined,
           },
         });
 
