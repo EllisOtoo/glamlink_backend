@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { VendorStatus, Prisma } from '@prisma/client';
+import { VendorStatus, VendorPaymentMode, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { StorageService } from '../storage/storage.service';
 import { ServicesService } from '../services/services.service';
@@ -43,6 +43,8 @@ export interface VendorSummary {
   bookingCount: number;
   travelsNationally: boolean;
   travelFeePerKmPesewas: number | null;
+  paymentMode: 'FULL_UPFRONT' | 'DEPOSIT_REQUIRED';
+  defaultDepositPercent: number | null;
 }
 
 export interface ServiceImageSummary {
@@ -180,6 +182,8 @@ type VendorSummarySource = {
   ratingCount: number;
   travelsNationally?: boolean;
   travelFeePerKmPesewas?: number | null;
+  paymentMode: VendorPaymentMode;
+  defaultDepositPercent?: number | null;
 };
 
 const SERVICE_INCLUDE = {
@@ -208,6 +212,8 @@ const SERVICE_INCLUDE = {
       ratingCount: true,
       travelsNationally: true,
       travelFeePerKmPesewas: true,
+      paymentMode: true,
+      defaultDepositPercent: true,
       services: {
         where: { isActive: true },
         select: { priceCents: true },
@@ -285,6 +291,8 @@ export class PublicCatalogService {
         bookingCount: true,
         ratingAverage: true,
         ratingCount: true,
+        paymentMode: true,
+        defaultDepositPercent: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -353,6 +361,8 @@ export class PublicCatalogService {
         bookingCount: true,
         ratingAverage: true,
         ratingCount: true,
+        paymentMode: true,
+        defaultDepositPercent: true,
         services: {
           where: { isActive: true },
           select: { priceCents: true },
@@ -406,6 +416,8 @@ export class PublicCatalogService {
         bookingCount: true,
         ratingAverage: true,
         ratingCount: true,
+        paymentMode: true,
+        defaultDepositPercent: true,
       services: {
         where: { isActive: true },
         select: { priceCents: true },
@@ -1385,6 +1397,8 @@ export class PublicCatalogService {
       bookingCount: vendor.bookingCount,
       travelsNationally: vendor.travelsNationally ?? false,
       travelFeePerKmPesewas: vendor.travelFeePerKmPesewas ?? null,
+      paymentMode: vendor.paymentMode ?? 'FULL_UPFRONT',
+      defaultDepositPercent: vendor.defaultDepositPercent ?? null,
     };
   }
 

@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -13,6 +14,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { VendorPaymentMode } from '@prisma/client';
 
 const HANDLE_REGEX = /^[a-z0-9](?:[a-z0-9-_]{1,28}[a-z0-9])?$/;
 
@@ -126,4 +128,15 @@ export class UpdateVendorProfileDto {
   @Min(0)
   @Max(1000) // Max GHS 10/km (1000 pesewas = GHS 10)
   travelFeePerKmPesewas?: number;
+
+  @IsOptional()
+  @IsEnum(VendorPaymentMode)
+  paymentMode?: VendorPaymentMode;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(20)
+  @Max(50)
+  defaultDepositPercent?: number;
 }

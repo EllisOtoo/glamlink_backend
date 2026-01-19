@@ -11,11 +11,13 @@ import {
   BookingSource,
   BookingStatus,
   PaymentIntent,
+  PaymentIntentType,
   PaymentProvider,
   PaymentStatus,
   Service,
   UserRole,
   Vendor,
+  VendorPaymentMode,
   VendorStatus,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -190,7 +192,7 @@ export class BookingsService {
 
     // Total price includes service + travel fee
     const price = servicePrice + travelFee;
-    const depositPercent = this.resolveDepositPercent(service.depositPercent);
+    const depositPercent = this.resolveDepositPercent(vendor, service.depositPercent);
     const calculatedDeposit = Math.min(
       price,
       Math.floor((price * depositPercent) / 100),
@@ -1056,6 +1058,101 @@ export class BookingsService {
     return updated;
   }
 
+  /**
+   * Initiate balance payment for a confirmed booking with outstanding balance.
+   * Returns a Paystack checkout payload for the customer to complete payment.
+   */
+  async payBookingBalance(
+    userId: string,
+    bookingId: string,
+  ): Promise<{
+    booking: Booking;
+    paystack: {
+      publicKey: string;
+      reference: string;
+      amountPesewas: number;
+      currency: string;
+      email: string;
+      metadata: Record<string, unknown>;
+      channels?: string[];
+    } | null;
+  }> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { vendor: true, service: true, customer: true },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    // Verify customer ownership
+    if (booking.customerUserId !== userId) {
+      throw new ForbiddenException('You cannot manage this booking.');
+    }
+
+    // Booking must be confirmed with outstanding balance
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'Only confirmed bookings can have balance payments.',
+      );
+    }
+
+    if (booking.balancePesewas <= 0) {
+      throw new BadRequestException('This booking has no outstanding balance.');
+    }
+
+    // Get customer email for Paystack
+    const customerEmail =
+      booking.customerEmail ??
+      booking.customer?.email ??
+      null;
+
+    if (!customerEmail) {
+      throw new BadRequestException(
+        'Customer email is required to process payment.',
+      );
+    }
+
+    const currency = 'GHS';
+    const reference = `bal_${randomUUID().replace(/-/g, '').slice(0, 24)}`;
+
+    // Create a new PaymentIntent for the balance payment
+    const paymentIntent = await this.prisma.paymentIntent.create({
+      data: {
+        bookingId: null, // Not linked directly since booking already has deposit intent
+        provider: PaymentProvider.PAYSTACK,
+        providerRef: reference,
+        paymentType: PaymentIntentType.BALANCE,
+        amountPesewas: booking.balancePesewas,
+        currency,
+        metadata: {
+          bookingId: booking.id,
+          vendorId: booking.vendorId,
+          serviceId: booking.serviceId,
+          type: 'balance_payment',
+        },
+      },
+    });
+
+    return {
+      booking,
+      paystack: {
+        publicKey: process.env.PAYSTACK_PUBLIC_KEY ?? '',
+        reference: paymentIntent.providerRef,
+        amountPesewas: paymentIntent.amountPesewas,
+        currency: paymentIntent.currency,
+        email: customerEmail,
+        metadata: {
+          bookingId: booking.id,
+          paymentIntentId: paymentIntent.id,
+          type: 'balance_payment',
+        },
+        channels: currency === 'GHS' ? ['mobile_money', 'card'] : undefined,
+      },
+    };
+  }
+
   private async findServiceAndVendor(
     serviceId: string,
   ): Promise<{ service: Service; vendor: Vendor }> {
@@ -1255,20 +1352,28 @@ export class BookingsService {
     }
   }
 
-  private resolveDepositPercent(depositPercent?: number | null): number {
-    if (typeof depositPercent !== 'number') {
-      return 100;
+  private resolveDepositPercent(
+    vendor: Vendor,
+    serviceDepositPercent?: number | null,
+  ): number {
+    // If service has explicit deposit percent, use it
+    if (typeof serviceDepositPercent === 'number') {
+      if (serviceDepositPercent < 0) return 0;
+      if (serviceDepositPercent > 100) return 100;
+      return serviceDepositPercent;
     }
 
-    if (depositPercent < 0) {
-      return 0;
+    // Otherwise, check vendor's payment mode
+    if (vendor.paymentMode === VendorPaymentMode.DEPOSIT_REQUIRED) {
+      // Use vendor's default deposit percent, or fallback to 30%
+      const percent = vendor.defaultDepositPercent ?? 30;
+      if (percent < 20) return 20;
+      if (percent > 50) return 50;
+      return percent;
     }
 
-    if (depositPercent > 100) {
-      return 100;
-    }
-
-    return depositPercent;
+    // FULL_UPFRONT mode - charge 100%
+    return 100;
   }
 
   private assertPositiveInt(amount: number): number {

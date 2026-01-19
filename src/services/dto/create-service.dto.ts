@@ -6,6 +6,7 @@ import {
   IsArray,
   MaxLength,
   Min,
+  Max,
   MinLength,
 } from 'class-validator';
 
@@ -45,4 +46,10 @@ export class CreateServiceDto {
   @IsArray()
   @IsString({ each: true })
   includes?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(20)
+  @Max(100)
+  depositPercent?: number;
 }

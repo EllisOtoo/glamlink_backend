@@ -289,6 +289,29 @@ export class PaystackService {
           },
         });
         activatedGiftCardId = paymentIntent.giftCard.id;
+      } else {
+        // Check if this is a balance payment (no linked booking but metadata has bookingId)
+        const metadata = this.normalizeMetadata(
+          paymentIntent.metadata as Record<string, unknown> | undefined,
+        );
+        if (metadata.type === 'balance_payment' && metadata.bookingId) {
+          const balanceBooking = await tx.booking.findUnique({
+            where: { id: metadata.bookingId as string },
+          });
+
+          if (balanceBooking && balanceBooking.balancePesewas > 0) {
+            confirmedBooking = await tx.booking.update({
+              where: { id: balanceBooking.id },
+              data: {
+                balancePesewas: 0,
+                paidAt: new Date(),
+              },
+            });
+            this.logger.log(
+              `Balance payment completed for booking ${balanceBooking.id}. Balance cleared.`,
+            );
+          }
+        }
       }
     });
 

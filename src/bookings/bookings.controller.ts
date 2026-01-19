@@ -209,6 +209,16 @@ export class BookingsController {
   }
 
   @UseGuards(SessionAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER, UserRole.VENDOR)
+  @Post('bookings/:bookingId/pay-balance')
+  async payBalance(
+    @CurrentUser() user: User,
+    @Param('bookingId') bookingId: string,
+  ) {
+    return this.bookingsService.payBookingBalance(user.id, bookingId);
+  }
+
+  @UseGuards(SessionAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('jobs/reminders/run')
   async runReminders(@Body() dto: RunRemindersDto) {

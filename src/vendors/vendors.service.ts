@@ -12,6 +12,7 @@ import {
   VendorStatusHistory,
   StaffMember,
   PortfolioItem,
+  VendorPaymentMode,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
@@ -124,6 +125,8 @@ export class VendorsService {
       onboardingStep?: number;
       travelsNationally?: boolean;
       travelFeePerKmPesewas?: number;
+      paymentMode?: VendorPaymentMode;
+      defaultDepositPercent?: number;
     },
   ): Promise<Vendor> {
     const normalizedHandle = payload.handle
@@ -182,6 +185,11 @@ export class VendorsService {
       travelFeePerKmPesewas:
         typeof payload.travelFeePerKmPesewas === 'number'
           ? payload.travelFeePerKmPesewas
+          : undefined,
+      paymentMode: payload.paymentMode,
+      defaultDepositPercent:
+        typeof payload.defaultDepositPercent === 'number'
+          ? payload.defaultDepositPercent
           : undefined,
     };
 

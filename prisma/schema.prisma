@@ -32,6 +32,8 @@ model Vendor {
   serviceRadiusKm       Int?                   @default(15)
   travelsNationally     Boolean                @default(false)
   travelFeePerKmPesewas Int?                   // Fee per km in pesewas (e.g., 100 = GHS 1/km)
+  paymentMode           VendorPaymentMode      @default(FULL_UPFRONT)
+  defaultDepositPercent Int?                   @default(30) // 20-50 range enforced in app
   onboardingStep        Int?                   @default(0)
   professionalTitle     String?
   yearsExperience       Int?
@@ -301,22 +303,23 @@ model Booking {
 }
 
 model PaymentIntent {
-  id            String          @id @default(cuid())
-  bookingId     String?         @unique
+  id            String            @id @default(cuid())
+  bookingId     String?           @unique
   provider      PaymentProvider
-  providerRef   String          @unique
-  status        PaymentStatus   @default(REQUIRES_PAYMENT_METHOD)
+  providerRef   String            @unique
+  status        PaymentStatus     @default(REQUIRES_PAYMENT_METHOD)
+  paymentType   PaymentIntentType @default(DEPOSIT)
   amountPesewas Int
-  currency      String          @default("GHS")
+  currency      String            @default("GHS")
   metadata      Json?
   lastError     String?
   confirmedAt   DateTime?
   cancelledAt   DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  giftCardId    String?         @unique
-  booking       Booking?        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  giftCard      GiftCard?       @relation("GiftCardPaymentIntent", fields: [giftCardId], references: [id])
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  giftCardId    String?           @unique
+  booking       Booking?          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  giftCard      GiftCard?         @relation("GiftCardPaymentIntent", fields: [giftCardId], references: [id])
   supplyOrder   SupplyOrder?
 }
 
@@ -696,6 +699,11 @@ enum VendorStatus {
   SUSPENDED
 }
 
+enum VendorPaymentMode {
+  FULL_UPFRONT      // Customer pays 100% at booking
+  DEPOSIT_REQUIRED  // Customer pays deposit, balance later
+}
+
 enum AvailabilityOverrideType {
   BLOCK
   EXTEND
@@ -726,6 +734,14 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   CANCELED
+}
+
+enum PaymentIntentType {
+  DEPOSIT
+  BALANCE
+  FULL
+  GIFT_CARD
+  SUPPLY_ORDER
 }
 
 enum GiftCardStatus {
