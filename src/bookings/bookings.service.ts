@@ -390,6 +390,35 @@ export class BookingsService {
     return bookings.map((booking) => this.withPublicCustomerProfile(booking));
   }
 
+  async getPublicBookingSummary(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        vendor: true,
+        service: {
+          select: {
+            id: true,
+            name: true,
+            durationMinutes: true,
+          },
+        },
+        customer: {
+          select: {
+            email: true,
+            customerProfile: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found.');
+    }
+
+    // Public view is allowed by ID for confirmation purposes
+    return this.withPublicCustomerProfile(booking);
+  }
+
   async getBookingForUser(user: User, bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },

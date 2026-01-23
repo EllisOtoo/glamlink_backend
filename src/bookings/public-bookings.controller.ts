@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Post,
   Req,
@@ -34,6 +35,11 @@ export class PublicBookingsController {
       booking,
       paystack,
     };
+  }
+
+  @Get(':bookingId')
+  async getSummary(@Param('bookingId') bookingId: string) {
+    return this.bookingsService.getPublicBookingSummary(bookingId);
   }
 
   @Post(':bookingId/cancel')
