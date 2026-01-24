@@ -629,7 +629,6 @@ export class ServicesService {
     const overlappingBookings = await this.prisma.booking.findMany({
       where: {
         vendorId: service.vendorId,
-        serviceId: service.id,
         status: { in: ACTIVE_BOOKING_STATUSES },
         scheduledStart: { lt: rangeEnd },
         scheduledEnd: { gt: rangeStart },
