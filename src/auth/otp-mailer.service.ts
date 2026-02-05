@@ -85,7 +85,7 @@ export class OtpMailerService implements OnModuleInit {
       await this.transporter.sendMail({
         from: this.fromAddress,
         to: email,
-        subject: 'Your GlamLink verification code',
+        subject: 'Your Bookikeke verification code',
         text: `Your verification code is ${code}. It expires in 5 minutes.`,
         html: `<p>Your verification code is <strong>${code}</strong>.</p><p>This code expires in 5 minutes.</p>`,
       });
