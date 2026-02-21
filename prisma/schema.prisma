@@ -189,6 +189,7 @@ model Service {
   bookingCount    Int                    @default(0)
   ratingAverage   Float?                 @default(0)
   ratingCount     Int                    @default(0)
+  searchEmbedding Unsupported("vector(1536)")?
 
   @@index([vendorId, isActive])
   @@index([categoryId])

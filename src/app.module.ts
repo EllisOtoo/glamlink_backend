@@ -21,6 +21,7 @@ import { GiftCardsModule } from './gift-cards/gift-cards.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { LocationsModule } from './locations/locations.module';
 import { SearchModule } from './search/search.module';
+import { AiSearchModule } from './ai-search/ai-search.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { SearchModule } from './search/search.module';
     PayoutsModule,
     LocationsModule,
     SearchModule,
+    AiSearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],
