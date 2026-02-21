@@ -56,17 +56,33 @@ export class AiSearchService {
         SELECT 
           s.id as "serviceId",
           s.name as "serviceName",
+          s.description,
           s."priceCents",
           s."durationMinutes",
           s."ratingAverage" as rating,
           s."ratingCount" as "reviewCount",
+          s."bookingCount",
+          s."depositPercent",
+          s.includes,
           v.id as "vendorId",
           v."businessName" as "vendorName",
           v.handle as "vendorHandle",
           v."logoStorageKey" as "vendorAvatar",
+          v."locationArea" as "vendorLocation",
+          v."professionalTitle" as "vendorTitle",
+          v."yearsExperience",
+          c.name as "categoryName",
+          si."storageKey" as "serviceImage",
           1 - (s."searchEmbedding" <=> '${vectorString}'::vector) as similarity
         FROM "Service" s
         JOIN "Vendor" v ON s."vendorId" = v.id
+        LEFT JOIN "Category" c ON s."categoryId" = c.id
+        LEFT JOIN LATERAL (
+          SELECT "storageKey" FROM "ServiceImage"
+          WHERE "serviceId" = s.id
+          ORDER BY "sortOrder" ASC
+          LIMIT 1
+        ) si ON true
         WHERE s."isActive" = true
           AND v.status NOT IN ('SUSPENDED', 'REJECTED')
           AND s."searchEmbedding" IS NOT NULL
@@ -87,6 +103,7 @@ export class AiSearchService {
         vendorHandle: r.vendorHandle,
         vendorAvatar: r.vendorAvatar,
         serviceName: r.serviceName,
+        description: r.description || null,
         priceCents: r.priceCents,
         durationMinutes: r.durationMinutes,
         distanceKm: null,
@@ -94,6 +111,14 @@ export class AiSearchService {
         reviewCount: r.reviewCount || 0,
         similarityScore: Math.round(r.similarity * 100),
         availableSlots: this.generateMockSlots(parsedQuery),
+        categoryName: r.categoryName || null,
+        vendorLocation: r.vendorLocation || null,
+        vendorTitle: r.vendorTitle || null,
+        yearsExperience: r.yearsExperience || null,
+        bookingCount: r.bookingCount || 0,
+        depositPercent: r.depositPercent || null,
+        includes: r.includes || [],
+        serviceImage: r.serviceImage || null,
       }));
   
       return {

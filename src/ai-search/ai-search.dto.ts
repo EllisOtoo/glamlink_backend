@@ -38,6 +38,7 @@ export interface AiSearchResult {
   vendorHandle: string;
   vendorAvatar: string | null;
   serviceName: string;
+  description: string | null;
   priceCents: number;
   durationMinutes: number;
   distanceKm: number | null;
@@ -45,6 +46,14 @@ export interface AiSearchResult {
   reviewCount: number;
   similarityScore: number;
   availableSlots: string[]; // e.g., ["09:00", "10:30"]
+  categoryName: string | null;
+  vendorLocation: string | null;
+  vendorTitle: string | null;
+  yearsExperience: number | null;
+  bookingCount: number;
+  depositPercent: number | null;
+  includes: string[];
+  serviceImage: string | null;
 }
 
 export interface AiSearchResponse {
