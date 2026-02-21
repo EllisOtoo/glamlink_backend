@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { ParsedQuery } from './ai-search.dto';
+import { resolveNaturalDate } from './date-resolution.util';
 
 @Injectable()
 export class QueryParserService {
@@ -53,6 +54,14 @@ Output exactly as a JSON object matching this schema.`,
       // Ensure lowercased intent
       if (parsed.serviceIntent) {
         parsed.serviceIntent = parsed.serviceIntent.toLowerCase();
+      }
+
+      const deterministicResolvedDate = resolveNaturalDate(
+        parsed.dateTime ?? query,
+        userTimeZone,
+      );
+      if (deterministicResolvedDate) {
+        parsed.resolvedDate = deterministicResolvedDate;
       }
 
       this.logger.debug(`Parsed query: ${JSON.stringify(parsed)}`);
