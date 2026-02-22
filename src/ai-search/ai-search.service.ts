@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmbeddingService } from './embedding.service';
 import { QueryParserService } from './query-parser.service';
 import { AiSearchRequestDto, AiSearchResponse, ParsedQuery } from './ai-search.dto';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class AiSearchService {
@@ -16,6 +17,7 @@ export class AiSearchService {
     private prisma: PrismaService,
     private embeddingService: EmbeddingService,
     private queryParserService: QueryParserService,
+    private storage: StorageService,
   ) {}
 
   async search(dto: AiSearchRequestDto, signal?: AbortSignal): Promise<AiSearchResponse> {
@@ -124,7 +126,7 @@ export class AiSearchService {
           bookingCount: r.bookingCount || 0,
           depositPercent: r.depositPercent || null,
           includes: r.includes || [],
-          serviceImage: r.serviceImage || null,
+          serviceImage: r.serviceImage ? this.storage.buildPublicUrl(r.serviceImage) : null,
         }))
         // Safety-net post-filter: drop anything that slipped through below threshold
         .filter(r => r.similarityScore >= this.MIN_SIMILARITY_THRESHOLD * 100);
