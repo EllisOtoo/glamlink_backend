@@ -208,6 +208,12 @@ export class BookingsService {
       throw new BadRequestException('Customer name is required.');
     }
 
+    // Platform Fee & Vendor Payout Calculation
+    const platformFeePercent = await this.platformSettings.getPlatformFeePercent();
+    // Platform fee is taken exclusively from the base service price, not the travel fee.
+    const platformFeePesewas = Math.floor((servicePrice * platformFeePercent) / 100);
+    const vendorPayoutPesewas = price - platformFeePesewas;
+
     const customerContext = await this.resolveCustomerContext(customerUserId);
     const customerEmail =
       this.normalizeNullable(dto.customerEmail)?.toLowerCase() ??
@@ -252,6 +258,8 @@ export class BookingsService {
           pricePesewas: price,
           depositPesewas: deposit,
           balancePesewas: balance,
+          platformFeePesewas,
+          vendorPayoutPesewas,
           notes: dto.notes?.trim() ?? null,
           seatId: seatAssignment.seatId,
           staffId: seatAssignment.staffId,

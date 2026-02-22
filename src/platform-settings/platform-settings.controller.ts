@@ -7,6 +7,7 @@ import type { User } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import { PlatformSettingsService } from './platform-settings.service';
 import { UpdateServiceMarkupDto } from './dto/update-service-markup.dto';
+import { UpdatePlatformFeeDto } from './dto/update-platform-fee.dto';
 
 @Controller('admin/settings')
 @UseGuards(SessionAuthGuard, RolesGuard)
@@ -35,6 +36,30 @@ export class PlatformSettingsController {
     return {
       basisPoints: setting.intValue ?? 0,
       percent: (setting.intValue ?? 0) / 100,
+      updatedAt: setting.updatedAt,
+      updatedById: setting.updatedById,
+    };
+  }
+
+  @Get('platform-fee')
+  async getPlatformFee() {
+    const percent = await this.settings.getPlatformFeePercent();
+    return {
+      percent,
+    };
+  }
+
+  @Put('platform-fee')
+  async updatePlatformFee(
+    @CurrentUser() user: User,
+    @Body() dto: UpdatePlatformFeeDto,
+  ) {
+    const setting = await this.settings.upsertPlatformFeePercent(
+      dto.percent,
+      user.id,
+    );
+    return {
+      percent: setting.intValue ?? 0,
       updatedAt: setting.updatedAt,
       updatedById: setting.updatedById,
     };

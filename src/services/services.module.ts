@@ -9,8 +9,16 @@ import {
   VendorServicesController,
 } from './services.controller';
 
+import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
+
 @Module({
-  imports: [PrismaModule, AuthModule, VendorsModule, StorageModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    VendorsModule,
+    StorageModule,
+    PlatformSettingsModule,
+  ],
   controllers: [VendorServicesController, VendorAvailabilityController],
   providers: [ServicesService],
   exports: [ServicesService],

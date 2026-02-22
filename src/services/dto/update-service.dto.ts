@@ -52,7 +52,7 @@ export class UpdateServiceDto {
 
   @IsOptional()
   @IsInt()
-  @Min(20)
+  @Min(0)
   @Max(100)
   depositPercent?: number | null; // Allow null to reset override
 }

@@ -33,6 +33,7 @@ import {
 import { RequestServiceImageUploadDto } from './dto/request-service-image-upload.dto';
 import { CreateServiceImageDto } from './dto/create-service-image.dto';
 import { ReorderServiceImagesDto } from './dto/reorder-service-images.dto';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 interface VendorContext {
   id: string;
@@ -54,6 +55,7 @@ export class ServicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   async listServicesForVendor(
@@ -86,6 +88,19 @@ export class ServicesService {
         : null;
     const isActive = typeof dto.isActive === 'boolean' ? dto.isActive : true;
 
+    // Validate deposit percentage against platform fee
+    const platformFeePercent =
+      await this.platformSettings.getPlatformFeePercent();
+    
+    // Vendor deposit defaults to the platform fee minimum if not provided
+    const depositPercent = dto.depositPercent ?? platformFeePercent;
+
+    if (depositPercent < platformFeePercent) {
+      throw new BadRequestException(
+        `Deposit percentage cannot be lower than the platform fee (${platformFeePercent}%).`,
+      );
+    }
+
     return this.prisma.service.create({
       data: {
         vendorId: vendor.id,
@@ -99,6 +114,7 @@ export class ServicesService {
           ? (await this.requireCategory(dto.categoryId)).id
           : null,
         includes: dto.includes ?? [],
+        depositPercent,
       },
     });
   }
@@ -125,6 +141,7 @@ export class ServicesService {
       isActive?: boolean;
       categoryId?: string | null;
       includes?: string[];
+      depositPercent?: number | null;
     } = {};
 
     if (typeof dto.name === 'string') {
@@ -137,6 +154,21 @@ export class ServicesService {
           ? dto.description.trim()
           : null;
       data.description = descriptionValue;
+    }
+
+    if (dto.depositPercent !== undefined) {
+      if (dto.depositPercent === null) {
+        data.depositPercent = null;
+      } else {
+        const platformFeePercent =
+          await this.platformSettings.getPlatformFeePercent();
+        if (dto.depositPercent < platformFeePercent) {
+          throw new BadRequestException(
+            `Deposit percentage cannot be lower than the platform fee (${platformFeePercent}%).`,
+          );
+        }
+        data.depositPercent = dto.depositPercent;
+      }
     }
 
     if (typeof dto.priceCents === 'number') {

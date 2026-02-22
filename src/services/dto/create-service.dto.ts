@@ -49,7 +49,7 @@ export class CreateServiceDto {
 
   @IsOptional()
   @IsInt()
-  @Min(20)
+  @Min(0)
   @Max(100)
   depositPercent?: number;
 }

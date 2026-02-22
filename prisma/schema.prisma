@@ -263,6 +263,8 @@ model Booking {
   pricePesewas        Int
   depositPesewas      Int
   balancePesewas      Int
+  platformFeePesewas  Int                    @default(0)
+  vendorPayoutPesewas Int                    @default(0)
   notes               String?
   cancelledAt         DateTime?
   completedAt         DateTime?
@@ -783,6 +785,7 @@ enum SupplyOrderStatus {
 
 enum PlatformSettingKey {
   SERVICE_MARKUP_BPS
+  PLATFORM_FEE_PERCENT
 }
 
 enum PayoutMethodType {

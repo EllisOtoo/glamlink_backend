@@ -201,9 +201,8 @@ export class PayoutsService {
 
     if (!booking) return;
 
-    // Calculate net earning (Price - Markup if any)
-    // For now, let's assume pricePesewas is what vendor gets (minus platform fee if we implement it)
-    const amountPesewas = booking.pricePesewas;
+    // Use the calculated vendor payout from the booking
+    const amountPesewas = booking.vendorPayoutPesewas;
 
     // Clearance period: 1 day
     const availableAt = new Date();
