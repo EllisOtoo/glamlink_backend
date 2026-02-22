@@ -8,6 +8,10 @@ import { AiSearchRequestDto, AiSearchResponse, ParsedQuery } from './ai-search.d
 export class AiSearchService {
   private readonly logger = new Logger(AiSearchService.name);
 
+  // Minimum cosine similarity (0–1) a result must meet to be returned.
+  // Tune this value: too high = valid queries get no results; too low = irrelevant results slip through.
+  private readonly MIN_SIMILARITY_THRESHOLD = 0.25;
+
   constructor(
     private prisma: PrismaService,
     private embeddingService: EmbeddingService,
@@ -86,6 +90,7 @@ export class AiSearchService {
         WHERE s."isActive" = true
           AND v.status NOT IN ('SUSPENDED', 'REJECTED')
           AND s."searchEmbedding" IS NOT NULL
+          AND 1 - (s."searchEmbedding" <=> '${vectorString}'::vector) >= ${this.MIN_SIMILARITY_THRESHOLD}
           ${locationFilter}
         ORDER BY s."searchEmbedding" <=> '${vectorString}'::vector
         LIMIT ${limit} OFFSET ${offset};
@@ -96,30 +101,33 @@ export class AiSearchService {
       if (signal?.aborted) throw new Error('Request aborted');
   
       // 4. Map results and generate pseudo-slots (real avail checks would go here)
-      const results = rawResults.map(r => ({
-        id: r.serviceId,
-        vendorId: r.vendorId,
-        vendorName: r.vendorName,
-        vendorHandle: r.vendorHandle,
-        vendorAvatar: r.vendorAvatar,
-        serviceName: r.serviceName,
-        description: r.description || null,
-        priceCents: r.priceCents,
-        durationMinutes: r.durationMinutes,
-        distanceKm: null,
-        rating: r.rating || 0,
-        reviewCount: r.reviewCount || 0,
-        similarityScore: Math.round(r.similarity * 100),
-        availableSlots: this.generateMockSlots(parsedQuery),
-        categoryName: r.categoryName || null,
-        vendorLocation: r.vendorLocation || null,
-        vendorTitle: r.vendorTitle || null,
-        yearsExperience: r.yearsExperience || null,
-        bookingCount: r.bookingCount || 0,
-        depositPercent: r.depositPercent || null,
-        includes: r.includes || [],
-        serviceImage: r.serviceImage || null,
-      }));
+      const results = rawResults
+        .map(r => ({
+          id: r.serviceId,
+          vendorId: r.vendorId,
+          vendorName: r.vendorName,
+          vendorHandle: r.vendorHandle,
+          vendorAvatar: r.vendorAvatar,
+          serviceName: r.serviceName,
+          description: r.description || null,
+          priceCents: r.priceCents,
+          durationMinutes: r.durationMinutes,
+          distanceKm: null,
+          rating: r.rating || 0,
+          reviewCount: r.reviewCount || 0,
+          similarityScore: Math.round(r.similarity * 100),
+          availableSlots: this.generateMockSlots(parsedQuery),
+          categoryName: r.categoryName || null,
+          vendorLocation: r.vendorLocation || null,
+          vendorTitle: r.vendorTitle || null,
+          yearsExperience: r.yearsExperience || null,
+          bookingCount: r.bookingCount || 0,
+          depositPercent: r.depositPercent || null,
+          includes: r.includes || [],
+          serviceImage: r.serviceImage || null,
+        }))
+        // Safety-net post-filter: drop anything that slipped through below threshold
+        .filter(r => r.similarityScore >= this.MIN_SIMILARITY_THRESHOLD * 100);
   
       return {
         parsedQuery,
