@@ -24,12 +24,17 @@ export class VerifiedVendorGuard implements CanActivate {
 
     const vendor = await this.vendorsService.findByUserId(user.id);
 
-    // Allow DRAFT status for onboarding access
+    // No vendor profile yet — allow access so onboarding can create services before submitting.
+    // The individual service operations guard against missing profiles internally.
+    if (!vendor) {
+      return true;
+    }
+
+    // Block REJECTED vendors (and any future statuses not explicitly allowed)
     if (
-      !vendor ||
-      (vendor.status !== VendorStatus.VERIFIED &&
-        vendor.status !== VendorStatus.DRAFT &&
-        vendor.status !== VendorStatus.PENDING_REVIEW)
+      vendor.status !== VendorStatus.VERIFIED &&
+      vendor.status !== VendorStatus.DRAFT &&
+      vendor.status !== VendorStatus.PENDING_REVIEW
     ) {
       throw new ForbiddenException(
         'Vendor account must be verified to access this resource.',

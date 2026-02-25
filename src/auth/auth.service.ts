@@ -25,6 +25,7 @@ export interface VendorContext {
   id: string;
   handle: string | null;
   status: VendorStatus;
+  onboardingStep: number;
 }
 
 export interface AuthSession {
@@ -269,29 +270,24 @@ export class AuthService {
     const normalizedEmail = this.normalizeEmail(email);
     const requestedRole = params.requestedRole ?? UserRole.CUSTOMER;
 
+    // Upsert the user OUTSIDE of the transaction.
+    // PostgreSQL aborts the entire transaction on any error (e.g. P2002 unique constraint),
+    // making recovery impossible inside the same tx. Running this step first, against the
+    // main prisma client, guarantees a clean connection for the upsert.
+    const { user } = await this.upsertFirebaseUser({
+      email: normalizedEmail,
+      firebaseUid: decodedToken.uid,
+      requestedRole,
+    });
+
     return this.prisma.$transaction(
       async (tx) => {
-        const { user, created } = await this.upsertFirebaseUserInTransaction(
-          tx,
-          {
-            email: normalizedEmail,
-            firebaseUid: decodedToken.uid,
-            requestedRole,
-          },
-        );
-
         const session = await this.createSession(tx, {
           userId: user.id,
           metadata: params.metadata,
         });
 
         const vendor = await this.findVendorContext(tx, user.id);
-
-        if (created) {
-          this.logger.log(
-            `Created new Firebase-backed user ${user.id} (${user.email})`,
-          );
-        }
 
         return {
           token: session.plainToken,
@@ -438,6 +434,7 @@ export class AuthService {
       vendorId: vendor?.id ?? null,
       vendorHandle: vendor?.handle ?? null,
       vendorStatus: vendor?.status ?? null,
+      onboardingStep: vendor?.onboardingStep ?? 0,
       exp,
     };
 
@@ -485,6 +482,7 @@ export class AuthService {
         id: true,
         handle: true,
         status: true,
+        onboardingStep: true,
       },
     });
 
@@ -496,6 +494,7 @@ export class AuthService {
       id: vendor.id,
       handle: vendor.handle,
       status: vendor.status,
+      onboardingStep: vendor.onboardingStep ?? 0,
     };
   }
 
@@ -555,9 +554,16 @@ export class AuthService {
         );
       }
 
+      const data: Prisma.UserUpdateInput = { lastSignedInAt: new Date() };
+      
+      // Auto-upgrade CUSTOMER -> VENDOR
+      if (requestedRole === UserRole.VENDOR && existing.role === UserRole.CUSTOMER) {
+        data.role = UserRole.VENDOR;
+      }
+
       const updated = await tx.user.update({
         where: { id: existing.id },
-        data: { lastSignedInAt: new Date() },
+        data,
       });
 
       return { user: updated, created: false };
@@ -577,15 +583,18 @@ export class AuthService {
     return { user, created: true };
   }
 
-  private async upsertFirebaseUserInTransaction(
-    tx: Prisma.TransactionClient,
-    params: {
-      email: string;
-      firebaseUid: string;
-      requestedRole: UserRole;
-    },
-  ): Promise<{ user: User; created: boolean }> {
-    const existingByUid = await tx.user.findUnique({
+  /**
+   * Upserts a Firebase-authenticated user against the main prisma client (NOT within a tx).
+   * Must stay outside transactions because PostgreSQL aborts the entire tx on any error,
+   * making recovery from P2002 unique-constraint violations impossible mid-transaction.
+   */
+  private async upsertFirebaseUser(params: {
+    email: string;
+    firebaseUid: string;
+    requestedRole: UserRole;
+  }): Promise<{ user: User; created: boolean }> {
+    // 1. Look up by Firebase UID first
+    const existingByUid = await this.prisma.user.findUnique({
       where: { firebaseUid: params.firebaseUid },
     });
 
@@ -596,7 +605,12 @@ export class AuthService {
         data.email = params.email;
       }
 
-      const updated = await tx.user.update({
+      // Auto-upgrade CUSTOMER -> VENDOR
+      if (params.requestedRole === UserRole.VENDOR && existingByUid.role === UserRole.CUSTOMER) {
+        data.role = UserRole.VENDOR;
+      }
+
+      const updated = await this.prisma.user.update({
         where: { id: existingByUid.id },
         data,
       });
@@ -604,8 +618,9 @@ export class AuthService {
       return { user: updated, created: false };
     }
 
-    const existingByEmail = await tx.user.findUnique({
-      where: { email: params.email },
+    // 2. Look up by email (case-insensitive) — covers users created via OTP or different flow
+    const existingByEmail = await this.prisma.user.findFirst({
+      where: { email: { equals: params.email, mode: 'insensitive' } },
     });
 
     if (existingByEmail) {
@@ -622,7 +637,12 @@ export class AuthService {
         data.firebaseUid = params.firebaseUid;
       }
 
-      const updated = await tx.user.update({
+      // Auto-upgrade CUSTOMER -> VENDOR
+      if (params.requestedRole === UserRole.VENDOR && existingByEmail.role === UserRole.CUSTOMER) {
+        data.role = UserRole.VENDOR;
+      }
+
+      const updated = await this.prisma.user.update({
         where: { id: existingByEmail.id },
         data,
       });
@@ -630,21 +650,54 @@ export class AuthService {
       return { user: updated, created: false };
     }
 
+    // 3. New user — create
     const roleToAssign =
       params.requestedRole === UserRole.ADMIN
         ? UserRole.CUSTOMER
         : params.requestedRole;
 
-    const user = await tx.user.create({
-      data: {
-        email: params.email,
-        firebaseUid: params.firebaseUid,
-        role: roleToAssign,
-        lastSignedInAt: new Date(),
-      },
-    });
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          email: params.email,
+          firebaseUid: params.firebaseUid,
+          role: roleToAssign,
+          lastSignedInAt: new Date(),
+        },
+      });
 
-    return { user, created: true };
+      this.logger.log(`Created new Firebase-backed user ${user.id} (${user.email})`);
+      return { user, created: true };
+    } catch (err: any) {
+      // P2002: unique constraint on email — user exists but our lookups missed them.
+      // This can happen due to email normalization differences between Firebase and the DB.
+      if (err?.code === 'P2002') {
+        this.logger.warn(
+          `P2002 on create for ${params.email} — falling back to find-and-update`,
+        );
+        const fallbackUser = await this.prisma.user.findUnique({
+          where: { email: params.email },
+        });
+
+        if (fallbackUser) {
+          const data: Prisma.UserUpdateInput = {
+            lastSignedInAt: new Date(),
+            firebaseUid: fallbackUser.firebaseUid ?? params.firebaseUid,
+          };
+
+          if (params.requestedRole === UserRole.VENDOR && fallbackUser.role === UserRole.CUSTOMER) {
+            data.role = UserRole.VENDOR;
+          }
+
+          const updated = await this.prisma.user.update({
+            where: { id: fallbackUser.id },
+            data,
+          });
+          return { user: updated, created: false };
+        }
+      }
+      throw err;
+    }
   }
 
   private async createSession(

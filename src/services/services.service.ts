@@ -61,7 +61,15 @@ export class ServicesService {
   async listServicesForVendor(
     userId: string,
   ): Promise<Array<Service & { images: ServiceImage[] }>> {
-    const vendor = await this.requireVendor(userId);
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { userId },
+    });
+
+    // Return empty list during onboarding when vendor profile doesn't exist yet
+    if (!vendor) {
+      return [];
+    }
+
     return this.prisma.service.findMany({
       where: { vendorId: vendor.id },
       orderBy: { createdAt: 'asc' },

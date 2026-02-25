@@ -205,6 +205,7 @@ export class AuthController {
       id: vendor.id,
       handle: vendor.handle,
       status: vendor.status,
+      onboardingStep: vendor.onboardingStep,
     };
   }
 
