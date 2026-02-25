@@ -34,6 +34,7 @@ import { RequestServiceImageUploadDto } from './dto/request-service-image-upload
 import { CreateServiceImageDto } from './dto/create-service-image.dto';
 import { ReorderServiceImagesDto } from './dto/reorder-service-images.dto';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { EmbeddingService } from '../ai-search/embedding.service';
 
 interface VendorContext {
   id: string;
@@ -56,6 +57,7 @@ export class ServicesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly platformSettings: PlatformSettingsService,
+    private readonly embeddingService: EmbeddingService,
   ) {}
 
   async listServicesForVendor(
@@ -109,7 +111,7 @@ export class ServicesService {
       );
     }
 
-    return this.prisma.service.create({
+    const service = await this.prisma.service.create({
       data: {
         vendorId: vendor.id,
         name: dto.name.trim(),
@@ -125,6 +127,19 @@ export class ServicesService {
         depositPercent,
       },
     });
+
+    try {
+      const intentText = `${service.name} ${service.description || ''} ${service.includes.join(' ')}`.trim();
+      const embedding = await this.embeddingService.generateEmbedding(intentText);
+      const vectorString = this.embeddingService.formatVector(embedding);
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "Service" SET "searchEmbedding" = '${vectorString}'::vector WHERE id = '${service.id}'`
+      );
+    } catch (error) {
+      console.error('Failed to generate search embedding on service create:', error);
+    }
+
+    return service;
   }
 
   async updateServiceForVendor(
@@ -207,10 +222,25 @@ export class ServicesService {
       data.includes = dto.includes;
     }
 
-    return this.prisma.service.update({
+    const updatedService = await this.prisma.service.update({
       where: { id: serviceId },
       data,
     });
+
+    if (data.name !== undefined || data.description !== undefined || data.includes !== undefined) {
+      try {
+        const intentText = `${updatedService.name} ${updatedService.description || ''} ${updatedService.includes.join(' ')}`.trim();
+        const embedding = await this.embeddingService.generateEmbedding(intentText);
+        const vectorString = this.embeddingService.formatVector(embedding);
+        await this.prisma.$executeRawUnsafe(
+          `UPDATE "Service" SET "searchEmbedding" = '${vectorString}'::vector WHERE id = '${updatedService.id}'`
+        );
+      } catch (error) {
+        console.error('Failed to update search embedding on service update:', error);
+      }
+    }
+
+    return updatedService;
   }
 
   async setServiceActiveState(

@@ -10,6 +10,7 @@ import {
 } from './services.controller';
 
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
+import { AiSearchModule } from '../ai-search/ai-search.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { PlatformSettingsModule } from '../platform-settings/platform-settings.m
     VendorsModule,
     StorageModule,
     PlatformSettingsModule,
+    AiSearchModule,
   ],
   controllers: [VendorServicesController, VendorAvailabilityController],
   providers: [ServicesService],

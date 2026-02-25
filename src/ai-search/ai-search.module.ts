@@ -10,6 +10,6 @@ import { StorageModule } from '../storage/storage.module';
   imports: [PrismaModule, StorageModule],
   controllers: [AiSearchController],
   providers: [AiSearchService, EmbeddingService, QueryParserService],
-  exports: [AiSearchService],
+  exports: [AiSearchService, EmbeddingService],
 })
 export class AiSearchModule {}
