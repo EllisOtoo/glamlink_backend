@@ -145,11 +145,7 @@ export class BookingsService {
     }
 
     const basePrice = this.assertPositiveInt(service.priceCents);
-    const serviceMarkupBps = await this.platformSettings.getServiceMarkupBps();
-    const servicePrice = this.platformSettings.applyServiceMarkup(
-      basePrice,
-      serviceMarkupBps,
-    );
+    const servicePrice = basePrice;
 
     // Calculate distance-based travel fee if requested
     let travelFee = 0;
@@ -190,13 +186,24 @@ export class BookingsService {
       travelFee = Math.round(travelDistanceKm * vendor.travelFeePerKmPesewas);
     }
 
-    // Total price includes service + travel fee
-    const price = servicePrice + travelFee;
-    const depositPercent = this.resolveDepositPercent(vendor, service.depositPercent);
+    // Platform Fee Calculation (calculated on base service price)
+    const platformFeePercent = await this.platformSettings.getPlatformFeePercent();
+    const platformFeePesewas = Math.floor((servicePrice * platformFeePercent) / 100);
+
+    // Total price includes service + travel fee + platform fee
+    const price = servicePrice + travelFee + platformFeePesewas;
+    
+    // Vendor gets everything except the platform fee
+    const vendorPayoutPesewas = servicePrice + travelFee;
+
+    // Deposit includes vendor's requested deposit plus the platform fee upfront
+    const vendorDepositPercent = this.resolveDepositPercent(vendor, service.depositPercent);
+    const vendorExpectedDeposit = Math.floor((servicePrice * vendorDepositPercent) / 100);
     const calculatedDeposit = Math.min(
       price,
-      Math.floor((price * depositPercent) / 100),
+      vendorExpectedDeposit + platformFeePesewas
     );
+
     const shouldCollectDeposit = collectDeposit && calculatedDeposit > 0;
     const deposit = shouldCollectDeposit ? calculatedDeposit : 0;
     const balance = price - deposit;
@@ -207,12 +214,6 @@ export class BookingsService {
     if (trimmedName.length === 0) {
       throw new BadRequestException('Customer name is required.');
     }
-
-    // Platform Fee & Vendor Payout Calculation
-    const platformFeePercent = await this.platformSettings.getPlatformFeePercent();
-    // Platform fee is taken exclusively from the base service price, not the travel fee.
-    const platformFeePesewas = Math.floor((servicePrice * platformFeePercent) / 100);
-    const vendorPayoutPesewas = price - platformFeePesewas;
 
     const customerContext = await this.resolveCustomerContext(customerUserId);
     const customerEmail =

@@ -784,7 +784,6 @@ enum SupplyOrderStatus {
 }
 
 enum PlatformSettingKey {
-  SERVICE_MARKUP_BPS
   PLATFORM_FEE_PERCENT
 }
 

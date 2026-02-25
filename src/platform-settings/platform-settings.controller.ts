@@ -6,7 +6,6 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import type { User } from '@prisma/client';
 import { UserRole } from '@prisma/client';
 import { PlatformSettingsService } from './platform-settings.service';
-import { UpdateServiceMarkupDto } from './dto/update-service-markup.dto';
 import { UpdatePlatformFeeDto } from './dto/update-platform-fee.dto';
 
 @Controller('admin/settings')
@@ -14,32 +13,6 @@ import { UpdatePlatformFeeDto } from './dto/update-platform-fee.dto';
 @Roles(UserRole.ADMIN)
 export class PlatformSettingsController {
   constructor(private readonly settings: PlatformSettingsService) {}
-
-  @Get('service-markup')
-  async getServiceMarkup() {
-    const basisPoints = await this.settings.getServiceMarkupBps();
-    return {
-      basisPoints,
-      percent: basisPoints / 100,
-    };
-  }
-
-  @Put('service-markup')
-  async updateServiceMarkup(
-    @CurrentUser() user: User,
-    @Body() dto: UpdateServiceMarkupDto,
-  ) {
-    const setting = await this.settings.upsertServiceMarkupBps(
-      dto.basisPoints,
-      user.id,
-    );
-    return {
-      basisPoints: setting.intValue ?? 0,
-      percent: (setting.intValue ?? 0) / 100,
-      updatedAt: setting.updatedAt,
-      updatedById: setting.updatedById,
-    };
-  }
 
   @Get('platform-fee')
   async getPlatformFee() {

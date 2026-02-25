@@ -11,14 +11,4 @@ export class PublicSettingsController {
     return {
       percent,
     };
-  }
-
-  @Get('service-markup')
-  async getServiceMarkup() {
-    const basisPoints = await this.settings.getServiceMarkupBps();
-    return {
-      basisPoints,
-      percent: basisPoints / 100,
-    };
-  }
-}
+  }}
