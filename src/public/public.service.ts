@@ -109,6 +109,18 @@ export interface ServiceDetailSummary extends ServiceSummary {
 export interface VendorDetailSummary extends VendorSummary {
   services: ServiceSummary[];
   recentReviews: ServiceReview[];
+  weeklyHours: {
+    dayOfWeek: number;
+    startMinute: number;
+    endMinute: number;
+  }[];
+  staff: {
+    id: string;
+    name: string;
+    bio: string | null;
+    avatarUrl: string | null;
+    specialties: string[];
+  }[];
 }
 
 export interface ServiceAvailabilitySlot {
@@ -418,6 +430,23 @@ export class PublicCatalogService {
         ratingCount: true,
         paymentMode: true,
         defaultDepositPercent: true,
+        weeklyHours: {
+          select: {
+            dayOfWeek: true,
+            startMinute: true,
+            endMinute: true,
+          },
+        },
+        staff: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            name: true,
+            bio: true,
+            avatarStorageKey: true,
+            specialties: true,
+          },
+        },
       services: {
         where: { isActive: true },
         select: { priceCents: true },
@@ -447,6 +476,13 @@ export class PublicCatalogService {
       ...vendorSummary,
       services: serviceSummaries,
       recentReviews,
+      weeklyHours: (vendor as any).weeklyHours,
+      staff: (vendor as any).staff.map((s) => ({
+        ...s,
+        avatarUrl: s.avatarStorageKey
+          ? this.storage.buildPublicUrl(s.avatarStorageKey)
+          : null,
+      })),
     };
   }
 
