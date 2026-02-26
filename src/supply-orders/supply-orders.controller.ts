@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -7,6 +7,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { RequestWithAuth } from '../auth/decorators/current-user.decorator';
 import { CreateSupplyOrderDto } from './dto/create-supply-order.dto';
 import { SupplyOrdersService } from './supply-orders.service';
+import { ListSupplyOrdersDto } from './dto/list-supply-orders.dto';
 
 @Controller('vendors/me/supplies/orders')
 @UseGuards(SessionAuthGuard, RolesGuard)
@@ -23,7 +24,10 @@ export class SupplyOrdersController {
   }
 
   @Get()
-  listOrders(@CurrentUser() user: RequestWithAuth['auth']['user']) {
-    return this.service.listForVendor(user.id);
+  listOrders(
+    @CurrentUser() user: RequestWithAuth['auth']['user'],
+    @Query() query: ListSupplyOrdersDto,
+  ) {
+    return this.service.listForVendor(user.id, query);
   }
 }

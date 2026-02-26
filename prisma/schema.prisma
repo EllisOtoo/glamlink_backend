@@ -53,6 +53,7 @@ model Vendor {
   seats                 ServiceSeat[]
   staff                 StaffMember[]
   supplyOrders          SupplyOrder[]
+  supplyInventory       VendorSupplyInventory[]
   reviewedBy            User?                  @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
   user                  User?                  @relation(fields: [userId], references: [id])
   payoutMethods         VendorPayoutMethod[]
@@ -546,10 +547,28 @@ model SupplyProduct {
   orderItems       SupplyOrderItem[]
   prices           SupplyPrice[]
   supplier         SupplySupplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  vendorInventory  VendorSupplyInventory[]
 
   @@index([supplierId, isActive])
   @@index([category, isActive])
   @@index([inStock, isActive])
+}
+
+model VendorSupplyInventory {
+  id             String       @id @default(cuid())
+  vendorId       String
+  productId      String
+  quantityOnHand Int          @default(0)
+  reorderLevel   Int?
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  product        SupplyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor         Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, productId])
+  @@index([vendorId, updatedAt])
+  @@index([productId])
 }
 
 model SupplyPrice {

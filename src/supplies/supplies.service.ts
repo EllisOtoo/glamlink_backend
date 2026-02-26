@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SupplyPrice } from '@prisma/client';
+import { Prisma, SupplyOrderStatus, SupplyPrice } from '@prisma/client';
 import { PrismaService } from '../prisma';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
@@ -13,6 +13,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 import { CatalogQueryDto } from './dto/catalog-query.dto';
 import { RequestProductImageUploadDto } from './dto/request-product-image-upload.dto';
+import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 import { StorageService } from '../storage/storage.service';
 
 const productInclude: Prisma.SupplyProductInclude = {
@@ -26,6 +27,13 @@ const productInclude: Prisma.SupplyProductInclude = {
 type ProductWithRelations = Prisma.SupplyProductGetPayload<{
   include: typeof productInclude;
 }>;
+
+const paidOrActiveOrderStatuses: SupplyOrderStatus[] = [
+  SupplyOrderStatus.WAITING_ON_SUPPLIER,
+  SupplyOrderStatus.CONFIRMED,
+  SupplyOrderStatus.OUT_FOR_DELIVERY,
+  SupplyOrderStatus.FULFILLED,
+];
 
 @Injectable()
 export class SuppliesService {
@@ -217,6 +225,14 @@ export class SuppliesService {
     const vendor = await this.requireVendor(userId);
     this.assertPilotAccess(vendor.id);
 
+    return this.listCatalog(query);
+  }
+
+  async listPublicCatalog(query: CatalogQueryDto) {
+    return this.listCatalog(query);
+  }
+
+  private async listCatalog(query: CatalogQueryDto) {
     const searchTerm = query.search?.trim();
 
     const products = await this.prisma.supplyProduct.findMany({
@@ -257,6 +273,141 @@ export class SuppliesService {
     return products
       .map((product) => this.toVendorView(product))
       .filter(Boolean);
+  }
+
+  async listInventoryForVendor(userId: string) {
+    const vendor = await this.requireVendor(userId);
+    this.assertPilotAccess(vendor.id);
+
+    const [products, purchased] = await Promise.all([
+      this.prisma.supplyProduct.findMany({
+        where: { isActive: true },
+        include: {
+          ...productInclude,
+          vendorInventory: {
+            where: { vendorId: vendor.id },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.supplyOrderItem.groupBy({
+        by: ['productId'],
+        where: {
+          order: {
+            vendorId: vendor.id,
+            status: {
+              in: [...paidOrActiveOrderStatuses],
+            },
+          },
+        },
+        _sum: {
+          quantity: true,
+        },
+      }),
+    ]);
+
+    const purchasedMap = new Map(
+      purchased.map((entry) => [entry.productId, entry._sum.quantity ?? 0]),
+    );
+
+    return products
+      .map((product) => {
+        const price = product.prices[0];
+        if (!price) {
+          return null;
+        }
+
+        const inventory = product.vendorInventory[0];
+        const quantityOnHand = inventory?.quantityOnHand ?? 0;
+        const reorderLevel = inventory?.reorderLevel ?? null;
+
+        return {
+          id: product.id,
+          productId: product.id,
+          name: product.name,
+          category: product.category,
+          supplierName: product.supplier.name,
+          unit: product.unit,
+          inStock: product.inStock,
+          vendorPriceCents: price.vendorPriceCents,
+          purchasedQuantity: purchasedMap.get(product.id) ?? 0,
+          quantityOnHand,
+          reorderLevel,
+          lowStock:
+            reorderLevel !== null ? quantityOnHand <= reorderLevel : false,
+          inventoryUpdatedAt: inventory?.updatedAt ?? null,
+          notes: inventory?.notes ?? null,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  async updateInventoryItem(
+    userId: string,
+    productId: string,
+    dto: UpdateInventoryItemDto,
+  ) {
+    const vendor = await this.requireVendor(userId);
+    this.assertPilotAccess(vendor.id);
+
+    if (
+      dto.quantityOnHand === undefined &&
+      dto.reorderLevel === undefined &&
+      dto.notes === undefined
+    ) {
+      throw new BadRequestException(
+        'Provide at least one field to update inventory.',
+      );
+    }
+
+    const product = await this.prisma.supplyProduct.findUnique({
+      where: { id: productId },
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found.');
+    }
+
+    const inventory = await this.prisma.vendorSupplyInventory.upsert({
+      where: {
+        vendorId_productId: {
+          vendorId: vendor.id,
+          productId,
+        },
+      },
+      create: {
+        vendorId: vendor.id,
+        productId,
+        quantityOnHand: dto.quantityOnHand ?? 0,
+        reorderLevel: dto.reorderLevel ?? null,
+        notes: dto.notes?.trim() || null,
+      },
+      update: {
+        quantityOnHand: dto.quantityOnHand,
+        reorderLevel:
+          dto.reorderLevel === undefined ? undefined : dto.reorderLevel,
+        notes:
+          dto.notes === undefined
+            ? undefined
+            : dto.notes.trim().length > 0
+              ? dto.notes.trim()
+              : null,
+      },
+    });
+
+    return {
+      id: inventory.id,
+      vendorId: inventory.vendorId,
+      productId: inventory.productId,
+      quantityOnHand: inventory.quantityOnHand,
+      reorderLevel: inventory.reorderLevel,
+      lowStock:
+        inventory.reorderLevel !== null
+          ? inventory.quantityOnHand <= inventory.reorderLevel
+          : false,
+      notes: inventory.notes,
+      updatedAt: inventory.updatedAt,
+    };
   }
 
   private buildPrice(

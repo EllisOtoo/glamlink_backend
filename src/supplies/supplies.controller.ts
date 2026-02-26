@@ -22,6 +22,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 import { CatalogQueryDto } from './dto/catalog-query.dto';
 import { RequestProductImageUploadDto } from './dto/request-product-image-upload.dto';
+import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 
 @Controller()
 export class AdminSuppliesController {
@@ -86,6 +87,16 @@ export class AdminSuppliesController {
   }
 }
 
+@Controller('public/supplies')
+export class PublicSuppliesController {
+  constructor(private readonly suppliesService: SuppliesService) {}
+
+  @Get('catalog')
+  listCatalog(@Query() query: CatalogQueryDto) {
+    return this.suppliesService.listPublicCatalog(query);
+  }
+}
+
 @Controller('vendors/me/supplies')
 @UseGuards(SessionAuthGuard, RolesGuard)
 @Roles(UserRole.VENDOR)
@@ -98,5 +109,19 @@ export class VendorSuppliesController {
     @Query() query: CatalogQueryDto,
   ) {
     return this.suppliesService.listCatalogForVendor(user.id, query);
+  }
+
+  @Get('inventory')
+  listInventory(@CurrentUser() user: RequestWithAuth['auth']['user']) {
+    return this.suppliesService.listInventoryForVendor(user.id);
+  }
+
+  @Put('inventory/:productId')
+  updateInventoryItem(
+    @CurrentUser() user: RequestWithAuth['auth']['user'],
+    @Param('productId') productId: string,
+    @Body() dto: UpdateInventoryItemDto,
+  ) {
+    return this.suppliesService.updateInventoryItem(user.id, productId, dto);
   }
 }

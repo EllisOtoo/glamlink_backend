@@ -4,11 +4,12 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SupplyOrderStatus } from '@prisma/client';
+import { SupplyOrderStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma';
 import { PaystackService } from '../payments/paystack.service';
 import { CreateSupplyOrderDto } from './dto/create-supply-order.dto';
+import { ListSupplyOrdersDto } from './dto/list-supply-orders.dto';
 
 const pilotEnabled =
   (process.env.SUPPLIES_PILOT_ENABLED ?? '').toLowerCase() === 'true';
@@ -144,15 +145,22 @@ export class SupplyOrdersService {
     };
   }
 
-  async listForVendor(userId: string) {
+  async listForVendor(userId: string, query: ListSupplyOrdersDto) {
     const vendor = await this.requireVendor(userId);
     this.assertPilot(vendor.id);
 
     const orders = await this.prisma.supplyOrder.findMany({
-      where: { vendorId: vendor.id },
+      where: {
+        vendorId: vendor.id,
+        status: query.status,
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         items: true,
+        history: {
+          orderBy: { createdAt: 'asc' },
+        },
+        paymentIntent: true,
       },
     });
     return orders;
