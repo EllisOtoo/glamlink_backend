@@ -68,6 +68,7 @@ export interface ServiceSummary {
   name: string;
   description: string | null;
   priceCents: number;
+  depositPercent: number | null;
   durationMinutes: number;
   vendor: VendorSummary;
   images: ServiceImageSummary[];
@@ -789,6 +790,7 @@ export class PublicCatalogService {
       name: service.name,
       description: service.description ?? null,
       priceCents: service.priceCents,
+      depositPercent: service.depositPercent ?? null,
       durationMinutes: service.durationMinutes,
       vendor: this.mapVendorSummary(service.vendor, reviewAggregates),
       images: service.images.map((image) => ({
