@@ -15,12 +15,25 @@ interface PushMessage {
   data?: Record<string, unknown>;
 }
 
+interface BookingNotificationDetails {
+  customerName: string;
+  customerPhone: string | null;
+  vendorBusinessName: string | null;
+  serviceName: string;
+  scheduledStart: Date;
+}
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly expoPushEndpoint = 'https://exp.host/--/api/v2/push/send';
   private readonly transporter?: Transporter;
   private readonly fromAddress: string;
+  private readonly whatsappAccessToken: string;
+  private readonly whatsappPhoneNumberId: string;
+  private readonly whatsappTemplateName: string;
+  private readonly whatsappTemplateLanguage: string;
+  private readonly bookingNotificationTimezone: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -37,6 +50,19 @@ export class NotificationsService {
       this.configService.get<string>('NOTIFICATIONS_FROM_EMAIL') ??
       this.configService.get<string>('OTP_FROM_EMAIL') ??
       'no-reply@glamlink.local';
+    this.whatsappAccessToken =
+      this.configService.get<string>('WHATSAPP_ACCESS_TOKEN') ?? '';
+    this.whatsappPhoneNumberId =
+      this.configService.get<string>('WHATSAPP_PHONE_NUMBER_ID') ?? '';
+    this.whatsappTemplateName =
+      this.configService.get<string>('WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE') ??
+      'appointment_confirmation_bookikeke';
+    this.whatsappTemplateLanguage =
+      this.configService.get<string>('WHATSAPP_TEMPLATE_LANGUAGE_CODE') ??
+      'en_US';
+    this.bookingNotificationTimezone =
+      this.configService.get<string>('BOOKING_NOTIFICATION_TIMEZONE') ??
+      'Africa/Accra';
 
     if (host && port) {
       const transportConfig: {
@@ -140,16 +166,20 @@ export class NotificationsService {
       customerTokens.forEach((token) => targets.add(token));
     }
 
-    if (targets.size === 0) {
-      return;
-    }
-
     const message = this.buildBookingMessage(event, booking.service.name);
-    if (!message) {
-      return;
+    const bookingDetails = {
+      customerName: booking.customerName,
+      customerPhone: booking.customerPhone ?? null,
+      vendorBusinessName: booking.vendor?.businessName ?? null,
+      serviceName: booking.service.name,
+      scheduledStart: booking.scheduledStart,
+    };
+
+    if (message && targets.size > 0) {
+      await this.sendExpoPush([...targets], message);
     }
 
-    await this.sendExpoPush([...targets], message);
+    await this.sendBookingConfirmationWhatsappIfNeeded(event, bookingDetails);
   }
 
   private async getTokensForUser(userId: string): Promise<string[]> {
@@ -256,6 +286,129 @@ export class NotificationsService {
         error as Error,
       );
     }
+  }
+
+  private async sendBookingConfirmationWhatsappIfNeeded(
+    event: BookingDomainEvent,
+    details: BookingNotificationDetails,
+  ) {
+    if (event.type !== BookingEventType.CONFIRMED) {
+      return;
+    }
+
+    if (event.status !== 'CONFIRMED') {
+      return;
+    }
+
+    if (event.payload?.balancePaymentCompleted === true) {
+      return;
+    }
+
+    const recipient = this.normalizeWhatsappPhone(details.customerPhone);
+    if (!recipient) {
+      return;
+    }
+
+    if (!this.whatsappAccessToken || !this.whatsappPhoneNumberId) {
+      this.logger.warn(
+        'WhatsApp booking confirmation skipped because Meta credentials are not configured.',
+      );
+      return;
+    }
+
+    const { formattedDate, formattedTime } = this.formatBookingSchedule(
+      details.scheduledStart,
+    );
+
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v22.0/${this.whatsappPhoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.whatsappAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: recipient,
+            type: 'template',
+            template: {
+              name: this.whatsappTemplateName,
+              language: {
+                code: this.whatsappTemplateLanguage,
+              },
+              components: [
+                {
+                  type: 'body',
+                  parameters: [
+                    { type: 'text', text: details.customerName },
+                    {
+                      type: 'text',
+                      text: details.vendorBusinessName ?? 'your vendor',
+                    },
+                    { type: 'text', text: details.serviceName },
+                    { type: 'text', text: formattedDate },
+                    { type: 'text', text: formattedTime },
+                  ],
+                },
+              ],
+            },
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.error(
+          `WhatsApp booking confirmation failed for booking ${event.bookingId}: ${response.status} ${body}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to send WhatsApp booking confirmation for booking ${event.bookingId}`,
+        error as Error,
+      );
+    }
+  }
+
+  private normalizeWhatsappPhone(phone: string | null): string | null {
+    if (!phone) {
+      return null;
+    }
+
+    const digits = phone.replace(/\D/g, '');
+    if (!digits) {
+      return null;
+    }
+
+    if (digits.startsWith('233') && digits.length >= 12) {
+      return digits;
+    }
+
+    if (digits.startsWith('0') && digits.length === 10) {
+      return `233${digits.slice(1)}`;
+    }
+
+    return digits;
+  }
+
+  private formatBookingSchedule(date: Date) {
+    const formattedDate = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.bookingNotificationTimezone,
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date);
+
+    const formattedTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.bookingNotificationTimezone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+
+    return { formattedDate, formattedTime };
   }
 
   async notifyReviewSubmitted(payload: {

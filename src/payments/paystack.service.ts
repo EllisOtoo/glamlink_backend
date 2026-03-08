@@ -166,6 +166,7 @@ export class PaystackService {
     let failedBooking: { booking: Booking; reason: string } | null = null;
     let supplyOrderId: string | null = null;
     let activatedGiftCardId: string | null = null;
+    let balancePaymentCompleted = false;
     await this.prisma.$transaction(async (tx) => {
       let paymentIntent = await this.findPaymentIntentForEvent(tx, data);
 
@@ -307,6 +308,7 @@ export class PaystackService {
                 paidAt: new Date(),
               },
             });
+            balancePaymentCompleted = true;
             this.logger.log(
               `Balance payment completed for booking ${balanceBooking.id}. Balance cleared.`,
             );
@@ -332,6 +334,7 @@ export class PaystackService {
         paystackReference: data.reference,
         paidAt: data.paidAt ?? null,
         channel: data.channel ?? null,
+        balancePaymentCompleted,
       });
       await this.calendarService.syncEntriesForBooking(confirmedBooking);
     } else if (supplyOrderId) {
