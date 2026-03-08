@@ -424,7 +424,10 @@ export class AuthService {
     decodedToken: DecodedIdToken,
     requestedRole: UserRole,
   ): boolean {
-    if (requestedRole !== UserRole.CUSTOMER) {
+    if (
+      requestedRole !== UserRole.CUSTOMER &&
+      requestedRole !== UserRole.VENDOR
+    ) {
       return false;
     }
 
