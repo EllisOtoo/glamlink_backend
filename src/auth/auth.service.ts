@@ -123,7 +123,8 @@ export class AuthService {
           );
         }
 
-        const codeMatches = otpRecord.codeHash === this.hashString(sanitizedCode);
+        const codeMatches =
+          otpRecord.codeHash === this.hashString(sanitizedCode);
 
         if (!codeMatches) {
           await tx.emailOtp.update({
@@ -222,7 +223,7 @@ export class AuthService {
         return null;
       }
       return { user };
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -269,6 +270,12 @@ export class AuthService {
 
     const normalizedEmail = this.normalizeEmail(email);
     const requestedRole = params.requestedRole ?? UserRole.CUSTOMER;
+
+    if (this.requiresVerifiedEmail(decodedToken, requestedRole)) {
+      throw new UnauthorizedException(
+        'Email address is not verified. Please verify your email before signing in.',
+      );
+    }
 
     // Upsert the user OUTSIDE of the transaction.
     // PostgreSQL aborts the entire transaction on any error (e.g. P2002 unique constraint),
@@ -413,6 +420,18 @@ export class AuthService {
     return decodedToken;
   }
 
+  private requiresVerifiedEmail(
+    decodedToken: DecodedIdToken,
+    requestedRole: UserRole,
+  ): boolean {
+    if (requestedRole !== UserRole.CUSTOMER) {
+      return false;
+    }
+
+    const provider = decodedToken.firebase.sign_in_provider;
+    return provider === 'password' && !decodedToken.email_verified;
+  }
+
   private buildJwt(
     user: User,
     decodedToken: DecodedIdToken,
@@ -498,7 +517,9 @@ export class AuthService {
     };
   }
 
-  async getCustomerProfile(userId: string): Promise<{ fullName: string | null; phoneNumber: string | null } | null> {
+  async getCustomerProfile(
+    userId: string,
+  ): Promise<{ fullName: string | null; phoneNumber: string | null } | null> {
     const profile = await this.prisma.customerProfile.findUnique({
       where: { userId },
       select: {
@@ -555,9 +576,12 @@ export class AuthService {
       }
 
       const data: Prisma.UserUpdateInput = { lastSignedInAt: new Date() };
-      
+
       // Auto-upgrade CUSTOMER -> VENDOR
-      if (requestedRole === UserRole.VENDOR && existing.role === UserRole.CUSTOMER) {
+      if (
+        requestedRole === UserRole.VENDOR &&
+        existing.role === UserRole.CUSTOMER
+      ) {
         data.role = UserRole.VENDOR;
       }
 
@@ -606,7 +630,10 @@ export class AuthService {
       }
 
       // Auto-upgrade CUSTOMER -> VENDOR
-      if (params.requestedRole === UserRole.VENDOR && existingByUid.role === UserRole.CUSTOMER) {
+      if (
+        params.requestedRole === UserRole.VENDOR &&
+        existingByUid.role === UserRole.CUSTOMER
+      ) {
         data.role = UserRole.VENDOR;
       }
 
@@ -638,7 +665,10 @@ export class AuthService {
       }
 
       // Auto-upgrade CUSTOMER -> VENDOR
-      if (params.requestedRole === UserRole.VENDOR && existingByEmail.role === UserRole.CUSTOMER) {
+      if (
+        params.requestedRole === UserRole.VENDOR &&
+        existingByEmail.role === UserRole.CUSTOMER
+      ) {
         data.role = UserRole.VENDOR;
       }
 
@@ -666,12 +696,14 @@ export class AuthService {
         },
       });
 
-      this.logger.log(`Created new Firebase-backed user ${user.id} (${user.email})`);
+      this.logger.log(
+        `Created new Firebase-backed user ${user.id} (${user.email})`,
+      );
       return { user, created: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // P2002: unique constraint on email — user exists but our lookups missed them.
       // This can happen due to email normalization differences between Firebase and the DB.
-      if (err?.code === 'P2002') {
+      if (this.isPrismaKnownRequestError(err, 'P2002')) {
         this.logger.warn(
           `P2002 on create for ${params.email} — falling back to find-and-update`,
         );
@@ -685,7 +717,10 @@ export class AuthService {
             firebaseUid: fallbackUser.firebaseUid ?? params.firebaseUid,
           };
 
-          if (params.requestedRole === UserRole.VENDOR && fallbackUser.role === UserRole.CUSTOMER) {
+          if (
+            params.requestedRole === UserRole.VENDOR &&
+            fallbackUser.role === UserRole.CUSTOMER
+          ) {
             data.role = UserRole.VENDOR;
           }
 
@@ -721,5 +756,12 @@ export class AuthService {
     });
 
     return { plainToken, record };
+  }
+
+  private isPrismaKnownRequestError(error: unknown, code: string): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === code
+    );
   }
 }
