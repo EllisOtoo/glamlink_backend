@@ -25,21 +25,24 @@ export class AiSearchService {
 
     if (signal?.aborted) throw new Error('Request aborted');
 
+    // Treat placeholder and empty strings as "no real text query"
+    const isRealQuery = !!dto.query && dto.query.trim().length > 0 && dto.query.trim() !== 'Visual Search';
+
     // 1. Parse or retrieve from token
     if (dto.parsedQueryToken) {
       try {
         parsedQuery = JSON.parse(Buffer.from(dto.parsedQueryToken, 'base64').toString('utf-8'));
       } catch (e) {
-        parsedQuery = dto.query ? await this.queryParserService.parseQuery(dto.query) : {} as ParsedQuery;
+        parsedQuery = isRealQuery ? await this.queryParserService.parseQuery(dto.query!) : { serviceIntent: null, location: null, dateTime: null, resolvedDate: null, timeRange: null } as ParsedQuery;
       }
     } else {
-      parsedQuery = dto.query ? await this.queryParserService.parseQuery(dto.query) : {} as ParsedQuery;
+      parsedQuery = isRealQuery ? await this.queryParserService.parseQuery(dto.query!) : { serviceIntent: null, location: null, dateTime: null, resolvedDate: null, timeRange: null } as ParsedQuery;
     }
 
     if (signal?.aborted) throw new Error('Request aborted');
 
     // 2. Generate Embedding
-    let intentText = parsedQuery?.serviceIntent || dto.query || '';
+    let intentText = parsedQuery?.serviceIntent || (isRealQuery ? dto.query! : '') || '';
     if (parsedQuery?.location) {
       intentText += ` in ${parsedQuery.location}`;
     }

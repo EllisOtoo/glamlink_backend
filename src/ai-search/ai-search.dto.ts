@@ -13,9 +13,10 @@ export class TimeRangeDto {
 }
 
 export class ParsedQueryDto {
-  @ApiProperty({ example: 'knotless braids' })
+  @ApiPropertyOptional({ example: 'knotless braids', nullable: true })
+  @IsOptional()
   @IsString()
-  serviceIntent: string;
+  serviceIntent: string | null;
 
   @ApiPropertyOptional({ example: 'East Legon', nullable: true })
   @IsOptional()
@@ -40,11 +41,13 @@ export class ParsedQueryDto {
 }
 
 export class AiSearchRequestDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'I need a hairstylist for knotless braids tomorrow morning around East Legon.',
+    default: '',
   })
+  @IsOptional()
   @IsString()
-  query: string;
+  query?: string = '';
 
   @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 10, example: 10 })
   @IsOptional()

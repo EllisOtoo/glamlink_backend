@@ -42,7 +42,7 @@ export class EmbeddingService {
 
       const response = await this.ai.models.embedContent({
         model: 'gemini-embedding-2-preview',
-        contents: parts as any, 
+        contents: { parts } as any, 
         config: {
           outputDimensionality: 1536,
         },
