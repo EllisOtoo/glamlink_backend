@@ -20,6 +20,7 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use(
     json({
+      limit: '20mb',
       verify: (req: any, _res, buffer) => {
         req.rawBody = buffer;
       },
@@ -27,6 +28,7 @@ async function bootstrap() {
   );
   app.use(
     urlencoded({
+      limit: '20mb',
       extended: true,
       verify: (req: any, _res, buffer) => {
         req.rawBody = buffer;

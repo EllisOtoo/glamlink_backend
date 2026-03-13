@@ -30,21 +30,27 @@ export class AiSearchService {
       try {
         parsedQuery = JSON.parse(Buffer.from(dto.parsedQueryToken, 'base64').toString('utf-8'));
       } catch (e) {
-        parsedQuery = await this.queryParserService.parseQuery(dto.query);
+        parsedQuery = dto.query ? await this.queryParserService.parseQuery(dto.query) : {} as ParsedQuery;
       }
     } else {
-      parsedQuery = await this.queryParserService.parseQuery(dto.query);
+      parsedQuery = dto.query ? await this.queryParserService.parseQuery(dto.query) : {} as ParsedQuery;
     }
 
     if (signal?.aborted) throw new Error('Request aborted');
 
     // 2. Generate Embedding
-    let intentText = parsedQuery.serviceIntent || dto.query;
-    if (parsedQuery.location) {
+    let intentText = parsedQuery?.serviceIntent || dto.query || '';
+    if (parsedQuery?.location) {
       intentText += ` in ${parsedQuery.location}`;
     }
-    const embedding = await this.embeddingService.generateEmbedding(intentText);
-      const vectorString = this.embeddingService.formatVector(embedding);
+    
+    // Pass visual attachments down to Gemini along with text intent
+    const embedding = await this.embeddingService.generateEmbedding(
+      intentText, 
+      dto.imageBase64, 
+      dto.imageMimeType
+    );
+    const vectorString = this.embeddingService.formatVector(embedding);
   
       if (signal?.aborted) throw new Error('Request aborted');
   
@@ -132,8 +138,8 @@ export class AiSearchService {
         .filter(r => r.similarityScore >= this.MIN_SIMILARITY_THRESHOLD * 100);
   
       return {
-        parsedQuery,
-        parsedQueryToken: Buffer.from(JSON.stringify(parsedQuery)).toString('base64'),
+        parsedQuery: parsedQuery || null,
+        parsedQueryToken: parsedQuery ? Buffer.from(JSON.stringify(parsedQuery)).toString('base64') : '',
         results,
         totalEstimate: results.length === limit ? offset + limit + 1 : offset + results.length,
         hasMore: results.length === limit,

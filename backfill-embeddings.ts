@@ -12,7 +12,7 @@ async function bootstrap() {
   
   // Use raw SQL because Prisma Client ignores Unsupported("vector") column types
   const rawServices: any[] = await prisma.$queryRawUnsafe(
-    `SELECT id, name, description, includes FROM "Service" WHERE "searchEmbedding" IS NULL AND "isActive" = true;`
+    `SELECT id, name, description, includes FROM "Service" WHERE "isActive" = true;`
   );
 
   console.log(`Found ${rawServices.length} services without embeddings.`);

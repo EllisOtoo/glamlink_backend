@@ -68,6 +68,22 @@ export class AiSearchRequestDto {
   @IsOptional()
   @IsString()
   parsedQueryToken?: string;
+
+  @ApiPropertyOptional({
+    description: 'Base64 encoded string of the uploaded image for visual style-match search.',
+    example: 'iVBORw0KGgoAAAANSUhEUgAA...',
+  })
+  @IsOptional()
+  @IsString()
+  imageBase64?: string;
+
+  @ApiPropertyOptional({
+    description: 'The MIME type of the uploaded image. e.g. "image/jpeg" or "image/png".',
+    example: 'image/jpeg',
+  })
+  @IsOptional()
+  @IsString()
+  imageMimeType?: string;
 }
 
 export type ParsedQuery = ParsedQueryDto;
