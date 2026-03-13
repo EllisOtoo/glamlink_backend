@@ -1,0 +1,2045 @@
+openapi: 3.0.0
+paths:
+  /:
+    get:
+      operationId: AppController_getHello
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags:
+        - App
+  /health:
+    get:
+      operationId: HealthController_getHealthStatus
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags:
+        - Health
+  /auth/request-otp:
+    post:
+      operationId: AuthController_requestOtp
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestOtpDto"
+      responses:
+        "202":
+          description: ""
+      tags: &a1
+        - Auth
+  /auth/verify-otp:
+    post:
+      operationId: AuthController_verifyOtp
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a1
+  /auth/firebase-login:
+    post:
+      operationId: AuthController_firebaseLogin
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirebaseLoginDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a1
+  /auth/register:
+    post:
+      operationId: AuthController_firebaseRegisterJwt
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirebaseRegisterDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a1
+  /auth/login:
+    post:
+      operationId: AuthController_firebaseLoginJwt
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FirebaseLoginDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a1
+  /auth/logout:
+    post:
+      operationId: AuthController_logout
+      parameters: []
+      responses:
+        "204":
+          description: ""
+      tags: *a1
+  /auth/me:
+    get:
+      operationId: AuthController_getProfile
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a1
+  /vendors/me:
+    get:
+      operationId: VendorsController_getMyProfile
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a2
+        - Vendors
+    put:
+      operationId: VendorsController_updateProfile
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVendorProfileDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /vendors/me/logo/upload-url:
+    post:
+      operationId: VendorsController_requestLogoUpload
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestLogoUploadUrlDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/logo:
+    put:
+      operationId: VendorsController_confirmLogoUpload
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmLogoDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /vendors/me/submit:
+    post:
+      operationId: VendorsController_submitForReview
+      parameters: []
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/documents:
+    post:
+      operationId: VendorsController_addDocument
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKycDocumentDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/documents/upload-url:
+    post:
+      operationId: VendorsController_requestKycUpload
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestKycUploadUrlDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/documents/{id}:
+    delete:
+      operationId: VendorsController_deleteDocument
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /vendors/me/staff:
+    get:
+      operationId: VendorsController_listStaff
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+    post:
+      operationId: VendorsController_createStaff
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffMemberDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/staff/{staffId}:
+    put:
+      operationId: VendorsController_updateStaff
+      parameters:
+        - name: staffId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffMemberDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+    delete:
+      operationId: VendorsController_archiveStaff
+      parameters:
+        - name: staffId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /vendors/me/staff/{staffId}/avatar/upload-url:
+    post:
+      operationId: VendorsController_requestStaffAvatarUpload
+      parameters:
+        - name: staffId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestStaffAvatarUploadUrlDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/seats:
+    get:
+      operationId: VendorsController_listSeats
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+    post:
+      operationId: VendorsController_createSeat
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSeatDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/seats/{seatId}:
+    put:
+      operationId: VendorsController_updateSeat
+      parameters:
+        - name: seatId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSeatDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+    delete:
+      operationId: VendorsController_archiveSeat
+      parameters:
+        - name: seatId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /vendors/me/portfolio:
+    get:
+      operationId: VendorsController_listMyPortfolio
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+    post:
+      operationId: VendorsController_confirmPortfolioUpload
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPortfolioUploadDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/portfolio/upload-url:
+    post:
+      operationId: VendorsController_requestPortfolioUpload
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestPortfolioUploadUrlDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/portfolio/{itemId}:
+    put:
+      operationId: VendorsController_updatePortfolioItem
+      parameters:
+        - name: itemId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePortfolioItemDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+    delete:
+      operationId: VendorsController_deletePortfolioItem
+      parameters:
+        - name: itemId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /vendors/me/verified-check:
+    get:
+      operationId: VendorsController_verifiedCheck
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /admin/vendors/{vendorId}:
+    get:
+      operationId: VendorsController_getVendorById
+      parameters:
+        - name: vendorId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a2
+  /admin/vendors/{vendorId}/approve:
+    post:
+      operationId: VendorsController_approveVendor
+      parameters:
+        - name: vendorId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminReviewDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /admin/vendors/{vendorId}/reject:
+    post:
+      operationId: VendorsController_rejectVendor
+      parameters:
+        - name: vendorId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminRejectDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a2
+  /vendors/me/services:
+    get:
+      operationId: VendorServicesController_listServices
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a3
+        - VendorServices
+    post:
+      operationId: VendorServicesController_createService
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}:
+    put:
+      operationId: VendorServicesController_updateService
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServiceDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}/archive:
+    post:
+      operationId: VendorServicesController_archiveService
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}/restore:
+    post:
+      operationId: VendorServicesController_restoreService
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}/images/upload-url:
+    post:
+      operationId: VendorServicesController_requestServiceImageUploadUrl
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestServiceImageUploadDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}/images:
+    post:
+      operationId: VendorServicesController_addServiceImage
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceImageDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a3
+    get:
+      operationId: VendorServicesController_listServiceImages
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}/images/{imageId}:
+    delete:
+      operationId: VendorServicesController_deleteServiceImage
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: imageId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a3
+  /vendors/me/services/{serviceId}/images/reorder:
+    post:
+      operationId: VendorServicesController_reorderServiceImages
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderServiceImagesDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a3
+  /vendors/me/availability/weekly:
+    get:
+      operationId: VendorAvailabilityController_getWeeklyAvailability
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a4
+        - VendorAvailability
+    put:
+      operationId: VendorAvailabilityController_setWeeklyAvailability
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetWeeklyAvailabilityDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a4
+  /vendors/me/availability/overrides:
+    get:
+      operationId: VendorAvailabilityController_listOverrides
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a4
+    post:
+      operationId: VendorAvailabilityController_createOverride
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAvailabilityOverrideDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a4
+  /vendors/me/availability/overrides/{overrideId}:
+    delete:
+      operationId: VendorAvailabilityController_deleteOverride
+      parameters:
+        - name: overrideId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a4
+  /vendors/me/availability/slots:
+    get:
+      operationId: VendorAvailabilityController_listAvailabilitySlots
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a4
+  /admin/settings/platform-fee:
+    get:
+      operationId: PlatformSettingsController_getPlatformFee
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a5
+        - PlatformSettings
+    put:
+      operationId: PlatformSettingsController_updatePlatformFee
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlatformFeeDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a5
+  /public/settings/platform-fee:
+    get:
+      operationId: PublicSettingsController_getPlatformFee
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags:
+        - PublicSettings
+  /search/ai:
+    post:
+      description: Parses a free-form booking request, generates semantic search
+        embeddings, and returns ranked service matches.
+      operationId: AiSearchController_search
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSearchRequestDto"
+      responses:
+        "200":
+          description: ""
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSearchResponseDto"
+      summary: Search services using natural language
+      tags:
+        - AiSearch
+  /public/bookings:
+    post:
+      operationId: PublicBookingsController_create
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePublicBookingDto"
+      responses:
+        "201":
+          description: ""
+      tags: &a6
+        - PublicBookings
+  /public/bookings/{bookingId}:
+    get:
+      operationId: PublicBookingsController_getSummary
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a6
+  /public/bookings/{bookingId}/cancel:
+    post:
+      operationId: PublicBookingsController_cancelPending
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelBookingDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a6
+  /vendors/me/bookings/upcoming:
+    get:
+      operationId: BookingsController_listVendorUpcomingBookings
+      parameters:
+        - name: limit
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: &a7
+        - Bookings
+  /vendors/me/bookings:
+    get:
+      operationId: BookingsController_listVendorBookings
+      parameters:
+        - name: status
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: take
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: skip
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/stats:
+    get:
+      operationId: BookingsController_getVendorBookingStats
+      parameters:
+        - name: startDate
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/daily-stats:
+    get:
+      operationId: BookingsController_getVendorDailyBookingStats
+      parameters:
+        - name: startDate
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/{bookingId}/complete:
+    post:
+      operationId: BookingsController_markBookingComplete
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/{bookingId}/no-show:
+    post:
+      operationId: BookingsController_markBookingNoShow
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/complete-past-today:
+    post:
+      operationId: BookingsController_completePastBookingsForToday
+      parameters: []
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/manual:
+    post:
+      operationId: BookingsController_createManualBooking
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManualBookingDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /vendors/me/bookings/{bookingId}/mark-paid:
+    post:
+      operationId: BookingsController_markManualBookingPaid
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /bookings/{bookingId}:
+    get:
+      operationId: BookingsController_getBookingById
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a7
+  /customers/me/bookings/upcoming:
+    get:
+      operationId: BookingsController_listCustomerUpcomingBookings
+      parameters:
+        - name: limit
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a7
+  /customers/me/bookings/completed:
+    get:
+      operationId: BookingsController_listCustomerCompletedBookings
+      parameters:
+        - name: limit
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a7
+  /customers/me/bookings/claim:
+    post:
+      operationId: BookingsController_claimCustomerBookings
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimBookingsDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /bookings/{bookingId}/reschedule:
+    post:
+      operationId: BookingsController_rescheduleBooking
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RescheduleBookingDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /bookings/{bookingId}/cancel:
+    post:
+      operationId: BookingsController_cancelBooking
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelBookingDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /bookings/{bookingId}/pay-balance:
+    post:
+      operationId: BookingsController_payBalance
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /jobs/reminders/run:
+    post:
+      operationId: BookingsController_runReminders
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunRemindersDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a7
+  /webhooks/paystack:
+    post:
+      operationId: PaystackWebhookController_handle
+      parameters:
+        - name: x-paystack-signature
+          required: true
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - PaystackWebhook
+  /notifications/tokens:
+    post:
+      operationId: NotificationsController_registerToken
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushTokenDto"
+      responses:
+        "201":
+          description: ""
+      tags:
+        - Notifications
+  /customers/me/profile:
+    get:
+      operationId: CustomerProfilesController_getProfile
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a8
+        - CustomerProfiles
+    patch:
+      operationId: CustomerProfilesController_updateProfile
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerProfileDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a8
+  /customers/me/profile/photo/upload-url:
+    post:
+      operationId: CustomerProfilesController_requestPhotoUploadUrl
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestProfilePhotoUploadDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a8
+  /customers/me/profile/photo:
+    put:
+      operationId: CustomerProfilesController_confirmPhotoUpload
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmProfilePhotoDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a8
+  /public/gift-cards:
+    post:
+      operationId: PublicGiftCardsController_create
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGiftCardDto"
+      responses:
+        "201":
+          description: ""
+      tags: &a9
+        - PublicGiftCards
+  /public/gift-cards/{code}:
+    get:
+      operationId: PublicGiftCardsController_lookup
+      parameters:
+        - name: code
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a9
+  /vendors/me/gift-cards:
+    get:
+      operationId: GiftCardsController_listForVendor
+      parameters:
+        - name: take
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: &a10
+        - GiftCards
+  /vendors/me/gift-cards/{giftCardId}:
+    get:
+      operationId: GiftCardsController_getVendorGiftCard
+      parameters:
+        - name: giftCardId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a10
+  /payouts/wallet:
+    get:
+      operationId: PayoutsController_getWallet
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a11
+        - Payouts
+  /payouts/transactions:
+    get:
+      operationId: PayoutsController_getTransactions
+      parameters:
+        - name: take
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: skip
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a11
+  /payouts/request:
+    post:
+      operationId: PayoutsController_requestPayout
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayoutRequestDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a11
+  /payouts/requests:
+    get:
+      operationId: PayoutsController_getPayoutRequests
+      parameters:
+        - name: take
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: skip
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a11
+  /payouts/methods:
+    post:
+      operationId: PayoutsController_addMethod
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePayoutMethodDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a11
+    get:
+      operationId: PayoutsController_getMethods
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a11
+  /payouts/methods/{id}:
+    delete:
+      operationId: PayoutsController_deleteMethod
+      parameters:
+        - name: id
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a11
+  /bookings/{bookingId}/review:
+    post:
+      operationId: BookingReviewsController_createReview
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewDto"
+      responses:
+        "201":
+          description: ""
+      tags: &a12
+        - BookingReviews
+  /bookings/{bookingId}/review/upload-url:
+    post:
+      operationId: BookingReviewsController_requestReviewMediaUpload
+      parameters:
+        - name: bookingId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestReviewMediaUploadDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a12
+  /reviews/{reviewId}/reply:
+    post:
+      operationId: ReviewsController_replyToReview
+      parameters:
+        - name: reviewId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplyReviewDto"
+      responses:
+        "201":
+          description: ""
+      tags: &a13
+        - Reviews
+  /reviews/vendors/me:
+    get:
+      operationId: ReviewsController_listVendorReviews
+      parameters:
+        - name: pendingOnly
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: limit
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a13
+  /public/catalog/categories:
+    get:
+      operationId: PublicCatalogController_listCategories
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a14
+        - PublicCatalog
+  /public/catalog/vendors/highlights:
+    get:
+      operationId: PublicCatalogController_highlightVendors
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/vendors/search:
+    get:
+      operationId: PublicCatalogController_searchVendors
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/vendors/{handle}:
+    get:
+      operationId: PublicCatalogController_vendorByHandle
+      parameters:
+        - name: handle
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/vendors/{handle}/portfolio:
+    get:
+      operationId: PublicCatalogController_vendorPortfolioByHandle
+      parameters:
+        - name: handle
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: limit
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/discover:
+    get:
+      operationId: PublicCatalogController_discoverServices
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/nearby:
+    get:
+      operationId: PublicCatalogController_nearbyServices
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/me:
+    get:
+      operationId: PublicCatalogController_listMyServices
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/{serviceId}:
+    get:
+      operationId: PublicCatalogController_serviceById
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/{serviceId}/availability:
+    get:
+      operationId: PublicCatalogController_availabilityByService
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/{serviceId}/reviews:
+    get:
+      operationId: PublicCatalogController_serviceReviews
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/services/{serviceId}/recommendations:
+    get:
+      operationId: PublicCatalogController_serviceRecommendations
+      parameters:
+        - name: serviceId
+          required: true
+          in: path
+          schema:
+            type: string
+        - name: lat
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: lng
+          required: true
+          in: query
+          schema:
+            type: string
+        - name: limit
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /public/catalog/vendors/{handle}/reviews:
+    get:
+      operationId: PublicCatalogController_vendorReviews
+      parameters:
+        - name: handle
+          required: true
+          in: path
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a14
+  /admin/supplies/suppliers:
+    get:
+      operationId: AdminSuppliesController_listSuppliers
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a15
+        - AdminSupplies
+    post:
+      operationId: AdminSuppliesController_createSupplier
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a15
+  /admin/supplies/suppliers/{supplierId}:
+    put:
+      operationId: AdminSuppliesController_updateSupplier
+      parameters:
+        - name: supplierId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSupplierDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a15
+  /admin/supplies/products:
+    get:
+      operationId: AdminSuppliesController_listProducts
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a15
+    post:
+      operationId: AdminSuppliesController_createProduct
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a15
+  /admin/supplies/products/{productId}:
+    put:
+      operationId: AdminSuppliesController_updateProduct
+      parameters:
+        - name: productId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a15
+  /admin/supplies/products/{productId}/image-upload-url:
+    post:
+      operationId: AdminSuppliesController_requestProductImageUploadUrl
+      parameters:
+        - name: productId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestProductImageUploadDto"
+      responses:
+        "201":
+          description: ""
+      tags: *a15
+  /public/supplies/catalog:
+    get:
+      operationId: PublicSuppliesController_listCatalog
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags:
+        - PublicSupplies
+  /vendors/me/supplies/catalog:
+    get:
+      operationId: VendorSuppliesController_listCatalog
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a16
+        - VendorSupplies
+  /vendors/me/supplies/inventory:
+    get:
+      operationId: VendorSuppliesController_listInventory
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a16
+  /vendors/me/supplies/inventory/{productId}:
+    put:
+      operationId: VendorSuppliesController_updateInventoryItem
+      parameters:
+        - name: productId
+          required: true
+          in: path
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInventoryItemDto"
+      responses:
+        "200":
+          description: ""
+      tags: *a16
+  /vendors/me/supplies/orders/checkout:
+    post:
+      operationId: SupplyOrdersController_checkout
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplyOrderDto"
+      responses:
+        "201":
+          description: ""
+      tags: &a17
+        - SupplyOrders
+  /vendors/me/supplies/orders:
+    get:
+      operationId: SupplyOrdersController_listOrders
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: *a17
+  /locations/regions:
+    get:
+      operationId: LocationsController_getRegions
+      parameters: []
+      responses:
+        "200":
+          description: ""
+      tags: &a18
+        - Locations
+  /locations/cities:
+    get:
+      operationId: LocationsController_getCities
+      parameters:
+        - name: regionId
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags: *a18
+  /search/suggestions:
+    get:
+      operationId: SearchController_getSuggestions
+      parameters:
+        - name: q
+          required: true
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ""
+      tags:
+        - Search
+info:
+  title: Glamlink API
+  description: The Glamlink API description
+  version: "1.0"
+  contact: {}
+tags: []
+servers: []
+components:
+  securitySchemes:
+    bearer:
+      scheme: bearer
+      bearerFormat: JWT
+      type: http
+  schemas:
+    RequestOtpDto:
+      type: object
+      properties: {}
+    VerifyOtpDto:
+      type: object
+      properties: {}
+    FirebaseLoginDto:
+      type: object
+      properties: {}
+    FirebaseRegisterDto:
+      type: object
+      properties: {}
+    UpdateVendorProfileDto:
+      type: object
+      properties: {}
+    RequestLogoUploadUrlDto:
+      type: object
+      properties: {}
+    ConfirmLogoDto:
+      type: object
+      properties: {}
+    CreateKycDocumentDto:
+      type: object
+      properties: {}
+    RequestKycUploadUrlDto:
+      type: object
+      properties: {}
+    CreateStaffMemberDto:
+      type: object
+      properties: {}
+    UpdateStaffMemberDto:
+      type: object
+      properties: {}
+    RequestStaffAvatarUploadUrlDto:
+      type: object
+      properties: {}
+    CreateSeatDto:
+      type: object
+      properties: {}
+    UpdateSeatDto:
+      type: object
+      properties: {}
+    RequestPortfolioUploadUrlDto:
+      type: object
+      properties: {}
+    ConfirmPortfolioUploadDto:
+      type: object
+      properties: {}
+    UpdatePortfolioItemDto:
+      type: object
+      properties: {}
+    AdminReviewDto:
+      type: object
+      properties: {}
+    AdminRejectDto:
+      type: object
+      properties: {}
+    CreateServiceDto:
+      type: object
+      properties: {}
+    UpdateServiceDto:
+      type: object
+      properties: {}
+    RequestServiceImageUploadDto:
+      type: object
+      properties: {}
+    CreateServiceImageDto:
+      type: object
+      properties: {}
+    ReorderServiceImagesDto:
+      type: object
+      properties: {}
+    SetWeeklyAvailabilityDto:
+      type: object
+      properties: {}
+    CreateAvailabilityOverrideDto:
+      type: object
+      properties: {}
+    UpdatePlatformFeeDto:
+      type: object
+      properties: {}
+    AiSearchRequestDto:
+      type: object
+      properties:
+        query:
+          type: string
+          example: I need a hairstylist for knotless braids tomorrow morning around East
+            Legon.
+        limit:
+          type: number
+          minimum: 1
+          maximum: 50
+          default: 10
+          example: 10
+        offset:
+          type: number
+          minimum: 0
+          default: 0
+          example: 0
+        parsedQueryToken:
+          type: string
+          description: Opaque token returned from a previous AI search to reuse parsed
+            query context.
+          example: eyJzZXJ2aWNlSW50ZW50Ijoia25vdGxlc3MgYnJhaWRzIn0=
+      required:
+        - query
+    TimeRangeDto:
+      type: object
+      properties:
+        start:
+          type: number
+          example: 480
+        end:
+          type: number
+          example: 720
+      required:
+        - start
+        - end
+    ParsedQueryDto:
+      type: object
+      properties:
+        serviceIntent:
+          type: string
+          example: knotless braids
+        location:
+          type: object
+          example: East Legon
+          nullable: true
+        dateTime:
+          type: object
+          example: tomorrow morning
+          nullable: true
+        resolvedDate:
+          type: object
+          example: 2026-03-14
+          nullable: true
+        timeRange:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/TimeRangeDto"
+      required:
+        - serviceIntent
+    AiSearchResultDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Service ID
+        vendorId:
+          type: string
+        vendorName:
+          type: string
+        vendorHandle:
+          type: string
+        vendorAvatar:
+          type: object
+          nullable: true
+        serviceName:
+          type: string
+        description:
+          type: object
+          nullable: true
+        priceCents:
+          type: number
+          example: 35000
+        durationMinutes:
+          type: number
+          example: 90
+        distanceKm:
+          type: object
+          nullable: true
+          example: 4.2
+        rating:
+          type: number
+          example: 4.8
+        reviewCount:
+          type: number
+          example: 122
+        similarityScore:
+          type: number
+          example: 38
+          description: Similarity score as a percentage from 0 to 100.
+        availableSlots:
+          example:
+            - 9:00 AM
+            - 9:30 AM
+            - 10:00 AM
+          type: array
+          items:
+            type: string
+        categoryName:
+          type: object
+          nullable: true
+        vendorLocation:
+          type: object
+          nullable: true
+        vendorTitle:
+          type: object
+          nullable: true
+        yearsExperience:
+          type: object
+          nullable: true
+          example: 6
+        bookingCount:
+          type: number
+          example: 240
+        depositPercent:
+          type: object
+          nullable: true
+          example: 20
+        includes:
+          example:
+            - Hot wash
+            - Hair trim
+          type: array
+          items:
+            type: string
+        serviceImage:
+          type: object
+          nullable: true
+      required:
+        - id
+        - vendorId
+        - vendorName
+        - vendorHandle
+        - serviceName
+        - priceCents
+        - durationMinutes
+        - rating
+        - reviewCount
+        - similarityScore
+        - availableSlots
+        - bookingCount
+        - includes
+    AiSearchResponseDto:
+      type: object
+      properties:
+        parsedQuery:
+          $ref: "#/components/schemas/ParsedQueryDto"
+        parsedQueryToken:
+          type: string
+          description: Opaque token the client can send back on subsequent paginated
+            requests.
+          example: eyJzZXJ2aWNlSW50ZW50Ijoia25vdGxlc3MgYnJhaWRzIiwibG9jYXRpb24iOiJFYXN0IExlZ29uIn0=
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiSearchResultDto"
+        totalEstimate:
+          type: number
+          example: 24
+        hasMore:
+          type: boolean
+          example: true
+      required:
+        - parsedQuery
+        - parsedQueryToken
+        - results
+        - totalEstimate
+        - hasMore
+    CreatePublicBookingDto:
+      type: object
+      properties: {}
+    CancelBookingDto:
+      type: object
+      properties: {}
+    CreateManualBookingDto:
+      type: object
+      properties: {}
+    ClaimBookingsDto:
+      type: object
+      properties: {}
+    RescheduleBookingDto:
+      type: object
+      properties: {}
+    RunRemindersDto:
+      type: object
+      properties: {}
+    RegisterPushTokenDto:
+      type: object
+      properties: {}
+    UpdateCustomerProfileDto:
+      type: object
+      properties: {}
+    RequestProfilePhotoUploadDto:
+      type: object
+      properties: {}
+    ConfirmProfilePhotoDto:
+      type: object
+      properties: {}
+    CreateGiftCardDto:
+      type: object
+      properties: {}
+    CreatePayoutRequestDto:
+      type: object
+      properties: {}
+    CreatePayoutMethodDto:
+      type: object
+      properties: {}
+    CreateReviewDto:
+      type: object
+      properties: {}
+    RequestReviewMediaUploadDto:
+      type: object
+      properties: {}
+    ReplyReviewDto:
+      type: object
+      properties: {}
+    CreateSupplierDto:
+      type: object
+      properties: {}
+    UpdateSupplierDto:
+      type: object
+      properties: {}
+    CreateProductDto:
+      type: object
+      properties: {}
+    UpdateProductDto:
+      type: object
+      properties: {}
+    RequestProductImageUploadDto:
+      type: object
+      properties: {}
+    UpdateInventoryItemDto:
+      type: object
+      properties: {}
+    CreateSupplyOrderDto:
+      type: object
+      properties: {}
