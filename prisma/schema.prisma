@@ -8,12 +8,12 @@ datasource db {
 }
 
 model Vendor {
-  id                    String                 @id @default(cuid())
+  id                    String                  @id @default(cuid())
   businessName          String
-  handle                String                 @unique
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  userId                String?                @unique
+  handle                String                  @unique
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  userId                String?                 @unique
   bio                   String?
   contactEmail          String?
   instagramHandle       String?
@@ -22,25 +22,28 @@ model Vendor {
   phoneNumber           String?
   rejectionReason       String?
   reviewedById          String?
-  status                VendorStatus           @default(DRAFT)
+  status                VendorStatus            @default(DRAFT)
   verifiedAt            DateTime?
   websiteUrl            String?
   logoStorageKey        String?
-  logoVersion           Int                    @default(0)
+  logoVersion           Int                     @default(0)
   latitude              Float?
   longitude             Float?
-  serviceRadiusKm       Int?                   @default(15)
-  travelsNationally     Boolean                @default(false)
-  travelFeePerKmPesewas Int?                   // Fee per km in pesewas (e.g., 100 = GHS 1/km)
-  paymentMode           VendorPaymentMode      @default(FULL_UPFRONT)
-  defaultDepositPercent Int?                   @default(30) // 20-50 range enforced in app
-  onboardingStep        Int?                   @default(0)
+  serviceRadiusKm       Int?                    @default(15)
+  onboardingStep        Int?                    @default(0)
   professionalTitle     String?
   yearsExperience       Int?
-  tiktokHandle          String?
   facebookUrl           String?
+  tiktokHandle          String?
   xHandle               String?
   youtubeChannel        String?
+  bookingCount          Int                     @default(0)
+  ratingAverage         Float?                  @default(0)
+  ratingCount           Int                     @default(0)
+  travelFeePerKmPesewas Int?
+  travelsNationally     Boolean                 @default(false)
+  defaultDepositPercent Int?                    @default(30)
+  paymentMode           VendorPaymentMode       @default(FULL_UPFRONT)
   availabilityOverrides AvailabilityOverride[]
   bookings              Booking[]
   calendarEntries       BookingCalendarEntry[]
@@ -53,16 +56,13 @@ model Vendor {
   seats                 ServiceSeat[]
   staff                 StaffMember[]
   supplyOrders          SupplyOrder[]
-  supplyInventory       VendorSupplyInventory[]
-  reviewedBy            User?                  @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
-  user                  User?                  @relation(fields: [userId], references: [id])
+  reviewedBy            User?                   @relation("VendorReviewedBy", fields: [reviewedById], references: [id])
+  user                  User?                   @relation(fields: [userId], references: [id])
   payoutMethods         VendorPayoutMethod[]
   statusHistory         VendorStatusHistory[]
+  supplyInventory       VendorSupplyInventory[]
   walletTransactions    WalletTransaction[]
   weeklyHours           WeeklyAvailability[]
-  bookingCount          Int                    @default(0)
-  ratingAverage         Float?                 @default(0)
-  ratingCount           Int                    @default(0)
 
   @@index([status])
 }
@@ -179,18 +179,18 @@ model Service {
   updatedAt       DateTime               @updatedAt
   depositPercent  Int?
   categoryId      String?
+  includes        String[]               @default([])
+  bookingCount    Int                    @default(0)
+  ratingAverage   Float?                 @default(0)
+  ratingCount     Int                    @default(0)
+  searchEmbedding Unsupported("vector")?
   bookings        Booking[]
   calendarEntries BookingCalendarEntry[]
+  portfolioItems  PortfolioItemService[]
   category        Category?              @relation(fields: [categoryId], references: [id])
   vendor          Vendor                 @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   images          ServiceImage[]
   seatLinks       ServiceSeatService[]
-  includes        String[]               @default([])
-  portfolioItems  PortfolioItemService[]
-  bookingCount    Int                    @default(0)
-  ratingAverage   Float?                 @default(0)
-  ratingCount     Int                    @default(0)
-  searchEmbedding Unsupported("vector(1536)")?
 
   @@index([vendorId, isActive])
   @@index([categoryId])
@@ -214,10 +214,10 @@ model ServiceImage {
   storageKey String
   caption    String?
   sortOrder  Int      @default(0)
-  width      Int?
-  height     Int?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  height     Int?
+  width      Int?
   service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@index([serviceId])
@@ -264,8 +264,6 @@ model Booking {
   pricePesewas        Int
   depositPesewas      Int
   balancePesewas      Int
-  platformFeePesewas  Int                    @default(0)
-  vendorPayoutPesewas Int                    @default(0)
   notes               String?
   cancelledAt         DateTime?
   completedAt         DateTime?
@@ -282,10 +280,12 @@ model Booking {
   createdByUserId     String?
   source              BookingSource          @default(ONLINE)
   paidAt              DateTime?
-  travelFeePesewas    Int?                   // Distance-based travel fee included
-  travelDistanceKm    Float?                 // Distance from vendor to customer
-  customerLatitude    Float?                 // Customer service location
-  customerLongitude   Float?                 // Customer service location
+  customerLatitude    Float?
+  customerLongitude   Float?
+  travelDistanceKm    Float?
+  travelFeePesewas    Int?
+  platformFeePesewas  Int                    @default(0)
+  vendorPayoutPesewas Int                    @default(0)
   createdBy           User?                  @relation("CreatedBookings", fields: [createdByUserId], references: [id])
   customer            User?                  @relation("CustomerBookings", fields: [customerUserId], references: [id])
   seat                ServiceSeat?           @relation(fields: [seatId], references: [id])
@@ -312,7 +312,6 @@ model PaymentIntent {
   provider      PaymentProvider
   providerRef   String            @unique
   status        PaymentStatus     @default(REQUIRES_PAYMENT_METHOD)
-  paymentType   PaymentIntentType @default(DEPOSIT)
   amountPesewas Int
   currency      String            @default("GHS")
   metadata      Json?
@@ -322,6 +321,7 @@ model PaymentIntent {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   giftCardId    String?           @unique
+  paymentType   PaymentIntentType @default(DEPOSIT)
   booking       Booking?          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   giftCard      GiftCard?         @relation("GiftCardPaymentIntent", fields: [giftCardId], references: [id])
   supplyOrder   SupplyOrder?
@@ -529,7 +529,7 @@ model SupplySupplier {
 }
 
 model SupplyProduct {
-  id               String            @id @default(cuid())
+  id               String                  @id @default(cuid())
   supplierId       String
   category         String
   name             String
@@ -538,15 +538,15 @@ model SupplyProduct {
   leadTimeDays     Int?
   mediaUrl         String?
   attributes       Json?
-  isActive         Boolean           @default(true)
-  inStock          Boolean           @default(true)
+  isActive         Boolean                 @default(true)
+  inStock          Boolean                 @default(true)
   stockRefreshedAt DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
   mediaStorageKey  String?
   orderItems       SupplyOrderItem[]
   prices           SupplyPrice[]
-  supplier         SupplySupplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier         SupplySupplier          @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   vendorInventory  VendorSupplyInventory[]
 
   @@index([supplierId, isActive])
@@ -555,14 +555,14 @@ model SupplyProduct {
 }
 
 model VendorSupplyInventory {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   vendorId       String
   productId      String
-  quantityOnHand Int          @default(0)
+  quantityOnHand Int           @default(0)
   reorderLevel   Int?
   notes          String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   product        SupplyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
   vendor         Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
@@ -701,6 +701,29 @@ model PayoutRequest {
   @@index([vendorId, status])
 }
 
+model Region {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cities    City[]
+
+  @@index([name])
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  regionId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  region    Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@unique([name, regionId])
+  @@index([regionId])
+  @@index([name])
+}
+
 enum PortfolioItemType {
   IMAGE
   VIDEO
@@ -722,8 +745,8 @@ enum VendorStatus {
 }
 
 enum VendorPaymentMode {
-  FULL_UPFRONT      // Customer pays 100% at booking
-  DEPOSIT_REQUIRED  // Customer pays deposit, balance later
+  FULL_UPFRONT
+  DEPOSIT_REQUIRED
 }
 
 enum AvailabilityOverrideType {
@@ -831,27 +854,4 @@ enum PayoutStatus {
   PAID
   REJECTED
   FAILED
-}
-
-model Region {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  cities    City[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([name])
-}
-
-model City {
-  id        String   @id @default(cuid())
-  name      String
-  regionId  String
-  region    Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([name, regionId])
-  @@index([regionId])
-  @@index([name])
 }
