@@ -18,6 +18,7 @@ interface PushMessage {
 interface BookingNotificationDetails {
   customerName: string;
   customerPhone: string | null;
+  vendorPhone: string | null;
   vendorBusinessName: string | null;
   serviceName: string;
   scheduledStart: Date;
@@ -37,6 +38,7 @@ export class NotificationsService {
   private readonly whatsappBookingConfirmationTemplateName: string;
   private readonly whatsappBookingReminder24hTemplateName: string;
   private readonly whatsappBookingReminder2hTemplateName: string;
+  private readonly whatsappVendorBookingAlertTemplateName: string;
   private readonly whatsappTemplateLanguage: string;
   private readonly bookingNotificationTimezone: string;
 
@@ -75,6 +77,9 @@ export class NotificationsService {
     this.whatsappBookingReminder2hTemplateName =
       this.configService.get<string>('WHATSAPP_BOOKING_REMINDER_2H_TEMPLATE') ??
       'appointment_reminder_bookikeke';
+    this.whatsappVendorBookingAlertTemplateName =
+      this.configService.get<string>('WHATSAPP_VENDOR_BOOKING_ALERT_TEMPLATE') ??
+      'vendor_booking_alert_bookikeke';
     this.whatsappTemplateLanguage =
       this.configService.get<string>('WHATSAPP_TEMPLATE_LANGUAGE_CODE') ??
       'en_US';
@@ -154,6 +159,7 @@ export class NotificationsService {
           select: {
             userId: true,
             businessName: true,
+            phoneNumber: true,
           },
         },
         service: {
@@ -188,6 +194,7 @@ export class NotificationsService {
     const bookingDetails = {
       customerName: booking.customerName,
       customerPhone: booking.customerPhone ?? null,
+      vendorPhone: booking.vendor?.phoneNumber ?? null,
       vendorBusinessName: booking.vendor?.businessName ?? null,
       serviceName: booking.service.name,
       scheduledStart: booking.scheduledStart,
@@ -198,6 +205,7 @@ export class NotificationsService {
     }
 
     await this.sendBookingWhatsappIfNeeded(event, bookingDetails);
+    await this.sendVendorBookingWhatsappIfNeeded(event, bookingDetails);
   }
 
   private async getTokensForUser(userId: string): Promise<string[]> {
@@ -397,6 +405,107 @@ export class NotificationsService {
     } catch (error) {
       this.logger.error(
         `Failed to send WhatsApp booking message for booking ${event.bookingId}`,
+        error as Error,
+      );
+    }
+  }
+
+  private async sendVendorBookingWhatsappIfNeeded(
+    event: BookingDomainEvent,
+    details: BookingNotificationDetails,
+  ) {
+    if (event.type !== BookingEventType.CONFIRMED) {
+      return;
+    }
+
+    if (event.status !== 'CONFIRMED') {
+      return;
+    }
+
+    if (event.payload?.balancePaymentCompleted === true) {
+      return;
+    }
+
+    const recipient = this.normalizeWhatsappPhone(details.vendorPhone);
+    if (!recipient) {
+      return;
+    }
+
+    if (!this.whatsappAccessToken || !this.whatsappPhoneNumberId) {
+      this.logger.warn(
+        'WhatsApp vendor booking alert skipped because Meta credentials are not configured.',
+      );
+      return;
+    }
+
+    const { formattedDate, formattedTime } = this.formatBookingSchedule(
+      details.scheduledStart,
+    );
+
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v22.0/${this.whatsappPhoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.whatsappAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: recipient,
+            type: 'template',
+            template: {
+              name: this.whatsappVendorBookingAlertTemplateName,
+              language: {
+                code: this.whatsappTemplateLanguage,
+              },
+              components: [
+                {
+                  type: 'body',
+                  parameters: [
+                    {
+                      type: 'text',
+                      parameter_name: 'vendor_name',
+                      text: details.vendorBusinessName ?? 'your business',
+                    },
+                    {
+                      type: 'text',
+                      parameter_name: 'customer_name',
+                      text: details.customerName,
+                    },
+                    {
+                      type: 'text',
+                      parameter_name: 'service_name',
+                      text: details.serviceName,
+                    },
+                    {
+                      type: 'text',
+                      parameter_name: 'booking_date',
+                      text: formattedDate,
+                    },
+                    {
+                      type: 'text',
+                      parameter_name: 'booking_time',
+                      text: formattedTime,
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.error(
+          `WhatsApp vendor booking alert failed for booking ${event.bookingId}: ${response.status} ${body}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to send WhatsApp vendor booking alert for booking ${event.bookingId}`,
         error as Error,
       );
     }

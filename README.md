@@ -33,6 +33,7 @@ ENABLE_WHATSAPP_BOOKING_REMINDERS="true"
 # Reminder templates approved in Meta
 WHATSAPP_BOOKING_REMINDER_24H_TEMPLATE="appointment_reminder_bookikeke"
 WHATSAPP_BOOKING_REMINDER_2H_TEMPLATE="appointment_reminder_bookikeke"
+WHATSAPP_VENDOR_BOOKING_ALERT_TEMPLATE="vendor_booking_alert_bookikeke"
 
 # Optional overrides for reminder timing
 BOOKING_REMINDER_24H_HOURS_AHEAD="24"
