@@ -45,7 +45,7 @@ export class BookingRemindersService {
     ];
   }
 
-  @Cron(CronExpression.EVERY_15_MINUTES)
+  @Cron('0 */15 * * * *')
   async handleScheduledReminders() {
     if (!this.remindersEnabled) {
       this.logger.debug('Booking reminders are disabled by configuration.');
