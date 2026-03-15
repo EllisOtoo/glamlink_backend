@@ -222,7 +222,6 @@ export class BookingsController {
   @Roles(UserRole.ADMIN)
   @Post('jobs/reminders/run')
   async runReminders(@Body() dto: RunRemindersDto) {
-    const hoursAhead = dto.hoursAhead ?? 24;
-    return this.bookingReminders.sendUpcomingReminders(hoursAhead);
+    return this.bookingReminders.sendUpcomingReminders(dto.stage ?? 'all');
   }
 }

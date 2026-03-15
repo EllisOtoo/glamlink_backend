@@ -23,6 +23,8 @@ interface BookingNotificationDetails {
   scheduledStart: Date;
 }
 
+type ReminderStage = '24h' | '2h';
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -32,7 +34,9 @@ export class NotificationsService {
   private readonly fromAddress: string;
   private readonly whatsappAccessToken: string;
   private readonly whatsappPhoneNumberId: string;
-  private readonly whatsappTemplateName: string;
+  private readonly whatsappBookingConfirmationTemplateName: string;
+  private readonly whatsappBookingReminder24hTemplateName: string;
+  private readonly whatsappBookingReminder2hTemplateName: string;
   private readonly whatsappTemplateLanguage: string;
   private readonly bookingNotificationTimezone: string;
 
@@ -60,9 +64,17 @@ export class NotificationsService {
       this.configService.get<string>('WHATSAPP_ACCESS_TOKEN') ?? '';
     this.whatsappPhoneNumberId =
       this.configService.get<string>('WHATSAPP_PHONE_NUMBER_ID') ?? '';
-    this.whatsappTemplateName =
-      this.configService.get<string>('WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE') ??
-      'appointment_confirmation_bookikeke';
+    this.whatsappBookingConfirmationTemplateName =
+      this.configService.get<string>(
+        'WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE',
+      ) ?? 'appointment_confirmation_bookikeke';
+    this.whatsappBookingReminder24hTemplateName =
+      this.configService.get<string>(
+        'WHATSAPP_BOOKING_REMINDER_24H_TEMPLATE',
+      ) ?? 'appointment_reminder_bookikeke';
+    this.whatsappBookingReminder2hTemplateName =
+      this.configService.get<string>('WHATSAPP_BOOKING_REMINDER_2H_TEMPLATE') ??
+      'appointment_reminder_bookikeke';
     this.whatsappTemplateLanguage =
       this.configService.get<string>('WHATSAPP_TEMPLATE_LANGUAGE_CODE') ??
       'en_US';
@@ -185,7 +197,7 @@ export class NotificationsService {
       await this.sendExpoPush([...targets], message);
     }
 
-    await this.sendBookingConfirmationWhatsappIfNeeded(event, bookingDetails);
+    await this.sendBookingWhatsappIfNeeded(event, bookingDetails);
   }
 
   private async getTokensForUser(userId: string): Promise<string[]> {
@@ -299,11 +311,14 @@ export class NotificationsService {
     }
   }
 
-  private async sendBookingConfirmationWhatsappIfNeeded(
+  private async sendBookingWhatsappIfNeeded(
     event: BookingDomainEvent,
     details: BookingNotificationDetails,
   ) {
-    if (event.type !== BookingEventType.CONFIRMED) {
+    if (
+      event.type !== BookingEventType.CONFIRMED &&
+      event.type !== BookingEventType.REMINDER
+    ) {
       return;
     }
 
@@ -311,7 +326,10 @@ export class NotificationsService {
       return;
     }
 
-    if (event.payload?.balancePaymentCompleted === true) {
+    if (
+      event.type === BookingEventType.CONFIRMED &&
+      event.payload?.balancePaymentCompleted === true
+    ) {
       return;
     }
 
@@ -322,13 +340,23 @@ export class NotificationsService {
 
     if (!this.whatsappAccessToken || !this.whatsappPhoneNumberId) {
       this.logger.warn(
-        'WhatsApp booking confirmation skipped because Meta credentials are not configured.',
+        'WhatsApp booking message skipped because Meta credentials are not configured.',
       );
       return;
     }
 
     const { formattedDate, formattedTime } = this.formatBookingSchedule(
       details.scheduledStart,
+    );
+    const templateName = this.resolveBookingWhatsappTemplate(event);
+    if (!templateName) {
+      return;
+    }
+    const templateParameters = this.buildBookingWhatsappParameters(
+      event,
+      details,
+      formattedDate,
+      formattedTime,
     );
 
     try {
@@ -345,23 +373,14 @@ export class NotificationsService {
             to: recipient,
             type: 'template',
             template: {
-              name: this.whatsappTemplateName,
+              name: templateName,
               language: {
                 code: this.whatsappTemplateLanguage,
               },
               components: [
                 {
                   type: 'body',
-                  parameters: [
-                    { type: 'text', text: details.customerName },
-                    {
-                      type: 'text',
-                      text: details.vendorBusinessName ?? 'your vendor',
-                    },
-                    { type: 'text', text: details.serviceName },
-                    { type: 'text', text: formattedDate },
-                    { type: 'text', text: formattedTime },
-                  ],
+                  parameters: templateParameters,
                 },
               ],
             },
@@ -372,15 +391,68 @@ export class NotificationsService {
       if (!response.ok) {
         const body = await response.text();
         this.logger.error(
-          `WhatsApp booking confirmation failed for booking ${event.bookingId}: ${response.status} ${body}`,
+          `WhatsApp booking message failed for booking ${event.bookingId}: ${response.status} ${body}`,
         );
       }
     } catch (error) {
       this.logger.error(
-        `Failed to send WhatsApp booking confirmation for booking ${event.bookingId}`,
+        `Failed to send WhatsApp booking message for booking ${event.bookingId}`,
         error as Error,
       );
     }
+  }
+
+  private resolveBookingWhatsappTemplate(event: BookingDomainEvent) {
+    if (event.type === BookingEventType.CONFIRMED) {
+      return this.whatsappBookingConfirmationTemplateName;
+    }
+
+    const stage = this.parseReminderStage(event.payload?.reminderStage);
+    if (stage === '24h') {
+      return this.whatsappBookingReminder24hTemplateName;
+    }
+    if (stage === '2h') {
+      return this.whatsappBookingReminder2hTemplateName;
+    }
+
+    this.logger.warn(
+      `Skipping WhatsApp reminder for booking ${event.bookingId} because the reminder stage is missing or invalid.`,
+    );
+    return null;
+  }
+
+  private buildBookingWhatsappParameters(
+    event: BookingDomainEvent,
+    details: BookingNotificationDetails,
+    formattedDate: string,
+    formattedTime: string,
+  ) {
+    if (event.type === BookingEventType.CONFIRMED) {
+      return [
+        { type: 'text', text: details.customerName },
+        {
+          type: 'text',
+          text: details.vendorBusinessName ?? 'your vendor',
+        },
+        { type: 'text', text: details.serviceName },
+        { type: 'text', text: formattedDate },
+        { type: 'text', text: formattedTime },
+      ];
+    }
+
+    return [
+      { type: 'text', text: details.customerName },
+      {
+        type: 'text',
+        text: details.vendorBusinessName ?? 'your vendor',
+      },
+      { type: 'text', text: formattedDate },
+      { type: 'text', text: formattedTime },
+    ];
+  }
+
+  private parseReminderStage(value: unknown): ReminderStage | null {
+    return value === '24h' || value === '2h' ? value : null;
   }
 
   private normalizeWhatsappPhone(phone: string | null): string | null {

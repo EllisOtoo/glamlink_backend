@@ -274,7 +274,8 @@ model Booking {
   cancelledBy         BookingCancelActor?
   rescheduleCount     Int                    @default(0)
   rescheduledAt       DateTime?
-  reminderSentAt      DateTime?
+  reminder24hSentAt   DateTime?
+  reminder2hSentAt    DateTime?
   seatId              String?
   staffId             String?
   createdByUserId     String?

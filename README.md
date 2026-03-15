@@ -26,7 +26,31 @@ Notification-related environment flags:
 ```bash
 # Disable Expo push delivery until the mobile apps are live
 ENABLE_PUSH_NOTIFICATIONS="false"
+
+# Enable automated WhatsApp booking reminders
+ENABLE_WHATSAPP_BOOKING_REMINDERS="true"
+
+# Reminder templates approved in Meta
+WHATSAPP_BOOKING_REMINDER_24H_TEMPLATE="appointment_reminder_bookikeke"
+WHATSAPP_BOOKING_REMINDER_2H_TEMPLATE="appointment_reminder_bookikeke"
+
+# Optional overrides for reminder timing
+BOOKING_REMINDER_24H_HOURS_AHEAD="24"
+BOOKING_REMINDER_2H_HOURS_AHEAD="2"
 ```
+
+The API now runs a reminder job every 15 minutes. It sends staged WhatsApp reminders for confirmed bookings that are within the configured windows and have not already received that stage.
+
+For manual triggering, admins can still call:
+
+```bash
+POST /jobs/reminders/run
+{
+  "stage": "all"
+}
+```
+
+Supported `stage` values are `all`, `24h`, and `2h`.
 
 ### Local Development Options
 
