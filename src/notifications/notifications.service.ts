@@ -28,6 +28,7 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   private readonly expoPushEndpoint = 'https://exp.host/--/api/v2/push/send';
   private readonly transporter?: Transporter;
+  private readonly pushNotificationsEnabled: boolean;
   private readonly fromAddress: string;
   private readonly whatsappAccessToken: string;
   private readonly whatsappPhoneNumberId: string;
@@ -50,6 +51,11 @@ export class NotificationsService {
       this.configService.get<string>('NOTIFICATIONS_FROM_EMAIL') ??
       this.configService.get<string>('OTP_FROM_EMAIL') ??
       'no-reply@glamlink.local';
+    const pushEnabled =
+      this.configService.get<string | boolean>('ENABLE_PUSH_NOTIFICATIONS') ??
+      true;
+    this.pushNotificationsEnabled =
+      pushEnabled === true || pushEnabled === 'true';
     this.whatsappAccessToken =
       this.configService.get<string>('WHATSAPP_ACCESS_TOKEN') ?? '';
     this.whatsappPhoneNumberId =
@@ -259,6 +265,11 @@ export class NotificationsService {
   }
 
   private async sendExpoPush(tokens: string[], message: PushMessage) {
+    if (!this.pushNotificationsEnabled) {
+      this.logger.debug('Push notifications are disabled by configuration.');
+      return;
+    }
+
     if (tokens.length === 0) {
       return;
     }

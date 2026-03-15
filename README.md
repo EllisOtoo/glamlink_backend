@@ -21,6 +21,13 @@ FIREBASE_CLIENT_EMAIL="firebase-adminsdk@glamlink-prod.iam.gserviceaccount.com"
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
+Notification-related environment flags:
+
+```bash
+# Disable Expo push delivery until the mobile apps are live
+ENABLE_PUSH_NOTIFICATIONS="false"
+```
+
 ### Local Development Options
 
 #### Option 1: Database Only (Recommended for Development)
