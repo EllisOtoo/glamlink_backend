@@ -31,6 +31,7 @@ ENABLE_PUSH_NOTIFICATIONS="false"
 ENABLE_WHATSAPP_BOOKING_REMINDERS="true"
 
 # Reminder templates approved in Meta
+WHATSAPP_BOOKING_RESCHEDULED_TEMPLATE="appointment_reschedule_bookikeke"
 WHATSAPP_BOOKING_REMINDER_24H_TEMPLATE="appointment_reminder_bookikeke"
 WHATSAPP_BOOKING_REMINDER_2H_TEMPLATE="appointment_reminder_bookikeke"
 WHATSAPP_VENDOR_BOOKING_ALERT_TEMPLATE="vendor_booking_alert_bookikeke"

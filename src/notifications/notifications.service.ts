@@ -36,6 +36,7 @@ export class NotificationsService {
   private readonly whatsappAccessToken: string;
   private readonly whatsappPhoneNumberId: string;
   private readonly whatsappBookingConfirmationTemplateName: string;
+  private readonly whatsappBookingRescheduledTemplateName: string;
   private readonly whatsappBookingReminder24hTemplateName: string;
   private readonly whatsappBookingReminder2hTemplateName: string;
   private readonly whatsappVendorBookingAlertTemplateName: string;
@@ -70,6 +71,10 @@ export class NotificationsService {
       this.configService.get<string>(
         'WHATSAPP_BOOKING_CONFIRMATION_TEMPLATE',
       ) ?? 'appointment_confirmation_bookikeke';
+    this.whatsappBookingRescheduledTemplateName =
+      this.configService.get<string>(
+        'WHATSAPP_BOOKING_RESCHEDULED_TEMPLATE',
+      ) ?? 'appointment_reschedule_bookikeke';
     this.whatsappBookingReminder24hTemplateName =
       this.configService.get<string>(
         'WHATSAPP_BOOKING_REMINDER_24H_TEMPLATE',
@@ -325,12 +330,16 @@ export class NotificationsService {
   ) {
     if (
       event.type !== BookingEventType.CONFIRMED &&
+      event.type !== BookingEventType.RESCHEDULED &&
       event.type !== BookingEventType.REMINDER
     ) {
       return;
     }
 
-    if (event.status !== 'CONFIRMED') {
+    if (
+      event.type !== BookingEventType.RESCHEDULED &&
+      event.status !== 'CONFIRMED'
+    ) {
       return;
     }
 
@@ -514,6 +523,9 @@ export class NotificationsService {
   private resolveBookingWhatsappTemplate(event: BookingDomainEvent) {
     if (event.type === BookingEventType.CONFIRMED) {
       return this.whatsappBookingConfirmationTemplateName;
+    }
+    if (event.type === BookingEventType.RESCHEDULED) {
+      return this.whatsappBookingRescheduledTemplateName;
     }
 
     const stage = this.parseReminderStage(event.payload?.reminderStage);
